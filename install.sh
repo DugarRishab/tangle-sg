@@ -17,7 +17,7 @@ sudo apt update && sudo apt upgrade -y
 
 # 3. Install dependencies
 echo "[INFO] Installing required packages..."
-sudo apt install -y libssl-dev python3 python3-pip python3-dev python3-rpi.gpio python3-spidev build-essential g++
+sudo apt install -y libssl-dev build-essential g++
 
 # 4. Install Python modules via pip (use --break-system-packages only if needed)
 # echo "[INFO] Installing Python libraries..."
@@ -27,6 +27,6 @@ sudo apt install -y libssl-dev python3 python3-pip python3-dev python3-rpi.gpio 
 echo "[INFO] Building the C++ system..."
 make clean && make
 
-# 6. Start the program
-echo "[INFO] Starting the system..."
-./tangle_poc
+# # 6. Start the program
+# echo "[INFO] Starting the system..."
+# ./tangle_poc

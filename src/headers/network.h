@@ -4,5 +4,4 @@
 #include "tangle.h"
 void startServer(Tangle& tangle);
 void broadcastTangle(const Tangle& tangle);
-void handleLoRaClient(Tangle& tangle);
 #endif

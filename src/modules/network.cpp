@@ -13,7 +13,6 @@
 #include <iomanip>
 #include <arpa/inet.h>
 #include <ctime>
-#include <lora.h>
 
 using namespace std;
 
@@ -199,14 +198,6 @@ void broadcastTangle(const Tangle &tangle)
 
     for (const auto &node : knownNodes)
     {
-        // if (sendOverTCP(message, node))
-        // {
-        //     continue;
-        // }
-        string messageForLora = tangleData + " " + checksum + " " + node;
-        if (!sendOverLora(messageForLora))
-        {
-            cout << "[ERROR] Failed to send data over LoRa" << endl;
-        }
+        sendOverTCP(message, node);
     }
 }

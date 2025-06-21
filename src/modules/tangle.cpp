@@ -51,6 +51,7 @@ string Tangle::serialize() const {
 void Tangle::updateFromSerialized(const string& data) {
     stringstream ss(data);
     string line;
+    Transaction lastTx;
 
     while (getline(ss, line)) {
         stringstream linestream(line);
@@ -96,8 +97,11 @@ void Tangle::updateFromSerialized(const string& data) {
 
         // Add the new transaction to the Tangle
         transactions[newTx.transaction_id] = newTx;
+        lastTx = newTx; // Keep track of the last transaction for cumulative weight updates
     }
     
     cout << "[LOG] Tangle updated from received data." << endl;
+    cout << "[LOG] Last transaction ID: " << lastTx.transaction_id << endl;
+    cout << "[LOG] Last transaction timestamp: " << lastTx.timestamp << endl;
 }
 
