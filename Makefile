@@ -14,7 +14,7 @@ BUILD_DIR = build
 # Source and object files
 SRC = $(SRC_DIR)/main.cpp $(MODULES_DIR)/pow.cpp $(MODULES_DIR)/tsa.cpp $(MODULES_DIR)/network.cpp $(MODULES_DIR)/tangle.cpp
 OBJ = $(patsubst %.cpp, $(BUILD_DIR)/%.o, $(notdir $(SRC)))
-EXEC = tangle_sg
+EXEC = tangle_poc
 
 # Default target
 all: $(BUILD_DIR) $(EXEC)
