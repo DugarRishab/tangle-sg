@@ -2,7 +2,7 @@
 CXX = g++
 PYTHON_CONFIG = python3-config
 CXXFLAGS = -std=c++17 -Wall -Wextra -I src/headers 
-LDFLAGS = -lssl -lcrypto -lpigpio -lpthread -lrt -lm
+LDFLAGS = -lssl -lcrypto -lpthread -lrt -lm
 
 
 # Directories
