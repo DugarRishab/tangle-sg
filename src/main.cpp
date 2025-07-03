@@ -75,12 +75,54 @@ int main()
     // Create genesis transaction (without PoW initially)
     Transaction genesis = {"tx0", "2025-03-11T12:00:00Z", 00000000011, "node_A", "node_B", 5.0, "kWh", 0.12, "USD", {}, {}, 1, ""};
 
-    // Compute PoW separately
-    genesis.proof_of_work = performPoW(genesis.transaction_id, 2);
-    tangle.addTransaction(genesis);
+    // // Compute PoW separately
+    // genesis.proof_of_work = performPoW(genesis.transaction_id, 2);
+    // tangle.addTransaction(genesis);
 
-    thread serverThread(startServer, ref(tangle));
-    thread simulationThread(simulateSmartMeter, ref(tangle));
+    // thread serverThread(startServer, ref(tangle));
+    // thread simulationThread(simulateSmartMeter, ref(tangle));
+
+    // THREAD 1: HTTP & WS server
+    auto serverWrapper = [&]()
+    {
+        try
+        {
+            std::cout << "[THREAD] startServer() beginning…\n";
+            startServer(std::ref(tangle)); // your existing function
+            std::cout << "[THREAD] startServer() returned!\n";
+        }
+        catch (const std::exception &ex)
+        {
+            std::cerr << "[ERROR] startServer threw: " << ex.what() << "\n";
+        }
+        catch (...)
+        {
+            std::cerr << "[ERROR] startServer threw unknown exception\n";
+        }
+    };
+
+    // THREAD 2: Simulation loop
+    auto simWrapper = [&]()
+    {
+        try
+        {
+            std::cout << "[THREAD] simulateSmartMeter() beginning…\n";
+            simulateSmartMeter(std::ref(tangle)); // your existing function
+            std::cout << "[THREAD] simulateSmartMeter() returned!\n";
+        }
+        catch (const std::exception &ex)
+        {
+            std::cerr << "[ERROR] simulateSmartMeter threw: " << ex.what() << "\n";
+        }
+        catch (...)
+        {
+            std::cerr << "[ERROR] simulateSmartMeter threw unknown exception\n";
+        }
+    };
+
+    // Launch both
+    std::thread serverThread(serverWrapper);
+    std::thread simulationThread(simWrapper);
 
     // Join the threads to keep the main function active
     serverThread.join();
