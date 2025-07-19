@@ -6,9 +6,12 @@ echo "[INFO] Starting setup for Tangle-SG system..."
 echo "[INFO] Enabling SPI... Don't need SPI on docker"
 
 # 2. Update system
-echo "[INFO] Updating packages..."
-apt-get update &&
-apt-get upgrade -y
+export DEBIAN_FRONTEND=noninteractive
+echo "Asia/Kolkata" > /etc/timezone
+dpkg-reconfigure -f noninteractive tzdata
+# echo "[INFO] Updating packages..."
+# apt-get update &&
+# apt-get upgrade -y
 
 # 3. Install dependencies
 echo "[INFO] Installing required packages..."
