@@ -13,14 +13,20 @@
 #include <iomanip>
 #include <arpa/inet.h>
 #include <ctime>
+#include "peers2.h"
+
+#include <websocketpp/config/asio_no_tls_client.hpp>
+#include <websocketpp/client.hpp>
 
 using namespace std;
 
-vector<string> knownNodes = {"192.168.29.95"}; // Example nodes
-mutex tangleMutex;
-const int PORT = 8080;
-const int BUFFER_SIZE = 4096;
-const int MAX_RETRIES = 1; // Number of times to retry sending data
+using WsClient = websocketpp::client<websocketpp::config::asio_client>;
+using ConnectionHdl = websocketpp::connection_hdl;
+using MessagePtr = websocketpp::config::asio_client::message_type::ptr;
+
+
+extern mutex tangleMutex;
+
 
 // Computes SHA-256 checksum of the data
 string computeChecksum(const string &data)
@@ -83,17 +89,8 @@ void printLastTransaction(Tangle &tangle)
     }
 }
 
-void handleTCPClient(int clientSocket, Tangle &tangle)
+void handleTCPClient(std::string receivedData, Tangle &tangle)
 {
-    char buffer[BUFFER_SIZE] = {0};
-    int bytesRead;
-    string receivedData;
-
-    while ((bytesRead = read(clientSocket, buffer, BUFFER_SIZE)) > 0)
-    {
-        receivedData.append(buffer, bytesRead);
-    }
-
     if (!receivedData.empty())
     {
         cout << "[LOG] Received Tangle update" << endl;
@@ -102,7 +99,11 @@ void handleTCPClient(int clientSocket, Tangle &tangle)
 
         if (verifyChecksum(actualData, receivedChecksum))
         {
-            tangle.updateFromSerialized(actualData);
+            // tangle.updateFromSerialized(actualData);
+            {
+                lock_guard<mutex> lock(tangleMutex);
+                tangle.updateFromSerialized(actualData);
+            }
             cout << "[LOG] Tangle update verified and applied." << endl;
             printLastTransaction(tangle);
         }
@@ -111,83 +112,35 @@ void handleTCPClient(int clientSocket, Tangle &tangle)
             cerr << "[ERROR] Data corruption detected!" << endl;
         }
     }
-    close(clientSocket);
-}
-
-void startServer(Tangle &tangle)
-{
-    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (serverSocket == -1)
+    else
     {
-        cerr << "[ERROR] Failed to create socket" << endl;
-        return;
-    }
-
-    sockaddr_in serverAddr{};
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_addr.s_addr = INADDR_ANY;
-    serverAddr.sin_port = htons(PORT);
-
-    if (bind(serverSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
-    {
-        cerr << "[ERROR] Failed to bind socket" << endl;
-        close(serverSocket);
-        return;
-    }
-
-    if (listen(serverSocket, 5) < 0)
-    {
-        cerr << "[ERROR] Failed to listen on socket" << endl;
-        close(serverSocket);
-        return;
-    }
-
-    cout << "[LOG] Server listening on port " << PORT << endl;
-
-    while (true)
-    {
-        int clientSocket = accept(serverSocket, nullptr, nullptr);
-        if (clientSocket >= 0)
-        {
-            cout << "[LOG] New connection received" << endl;
-            thread clientThread(handleTCPClient, clientSocket, ref(tangle));
-            clientThread.detach();
-        }
+        cerr << "[ERROR] Received empty data from TCP client." << endl;
     }
 }
 
-bool sendOverTCP(string message, string node)
+void setupMessageReceiver(WsClient &client, Tangle &tangle)
 {
-    int retryCount = 0;
-    while (retryCount < MAX_RETRIES)
-    {
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock == -1)
+    client.set_message_handler(
+        [&](ConnectionHdl hdl, MessagePtr msg)
         {
-            cerr << "[ERROR] Failed to create socket" << endl;
-            retryCount++;
-            continue;
-        }
+            // 1) Identify which peer sent it (if you’ve mapped hdl → peerId):
+            // std::string peerId = peerMap[hdl];
+            
+            // 2) Grab payload and optionally its opcode:
+            auto payload = msg->get_payload();
+            auto opcode = msg->get_opcode(); // text or binary
 
-        sockaddr_in serverAddr{};
-        serverAddr.sin_family = AF_INET;
-        serverAddr.sin_port = htons(PORT);
-        inet_pton(AF_INET, node.c_str(), &serverAddr.sin_addr);
-
-        if (connect(sock, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
-        {
-            cerr << "[ERROR] Failed to connect to " << node << " (Attempt " << retryCount + 1 << ")" << endl;
-            close(sock);
-            retryCount++;
-            continue;
-        }
-
-        send(sock, message.c_str(), message.size(), 0);
-        cout << "[LOG] Sent Tangle update to " << node << "using TCP/IP" << endl;
-        close(sock);
-        return true;
-    }
-    return false;
+            // 3) Process it:
+            if (opcode == websocketpp::frame::opcode::text)
+            {
+                // std::cout << "[recv] From peer: " << payload << "\n";
+                handleTCPClient(payload, tangle);
+            }
+            else
+            {
+                std::cout << "[recv] Received non‑text frame\n";
+            }
+        });
 }
 
 void broadcastTangle(const Tangle &tangle)
@@ -196,8 +149,8 @@ void broadcastTangle(const Tangle &tangle)
     string checksum = computeChecksum(tangleData);
     string message = tangleData + " " + checksum;
 
-    for (const auto &node : knownNodes)
+    for (auto peer : activePeers)
     {
-        sendOverTCP(message, node);
+        peer.client->send(peer.hdl, message, websocketpp::frame::opcode::text);
     }
 }

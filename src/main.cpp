@@ -9,11 +9,15 @@
 #include "headers/transaction.h"
 #include "headers/tangle.h"
 #include "headers/network.h"
+#include "headers/peers2.h"
 
 #include <vector>
 
 using namespace std;
 using namespace chrono;
+
+// global mutex to protect the shared Tangle
+std::mutex tangleMutex;
 
 void simulateSmartMeter(Tangle &tangle)
 {
@@ -66,38 +70,36 @@ void simulateSmartMeter(Tangle &tangle)
     }
 }
 
-
 int main()
 {
-    
+
     Tangle tangle;
 
     // Create genesis transaction (without PoW initially)
     Transaction genesis = {"tx0", "2025-03-11T12:00:00Z", 00000000011, "node_A", "node_B", 5.0, "kWh", 0.12, "USD", {}, {}, 1, ""};
-
+    {
+        lock_guard<mutex> lock(tangleMutex);
+        tangle.addTransaction(genesis);
+    }
     // // Compute PoW separately
     // genesis.proof_of_work = performPoW(genesis.transaction_id, 2);
     // tangle.addTransaction(genesis);
 
     // thread serverThread(startServer, ref(tangle));
     // thread simulationThread(simulateSmartMeter, ref(tangle));
-
-    // THREAD 1: HTTP & WS server
+    
+    // THREAD 1: WS server
     auto serverWrapper = [&]()
     {
         try
         {
-            std::cout << "[THREAD] startServer() beginning…\n";
-            startServer(std::ref(tangle)); // your existing function
-            std::cout << "[THREAD] startServer() returned!\n";
+            Peers pd(9000, tangle);
+            pd.findPeers(5); // Discover up to 5 peers
         }
-        catch (const std::exception &ex)
+        catch (std::exception &ex)
         {
-            std::cerr << "[ERROR] startServer threw: " << ex.what() << "\n";
-        }
-        catch (...)
-        {
-            std::cerr << "[ERROR] startServer threw unknown exception\n";
+            std::cerr << "Fatal: " << ex.what() << "\n";
+            // return 1;
         }
     };
 
