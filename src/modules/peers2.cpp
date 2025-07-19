@@ -5,7 +5,7 @@
 #include <random>
 #include <sstream>
 #include <cstring>
-#include <json/json.h> // assuming JSON lib
+#include <json/json.h> // using jsoncpp
 #include "tangle.h"
 #include "network.h"
 
