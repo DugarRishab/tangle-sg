@@ -10,8 +10,8 @@ export DEBIAN_FRONTEND=noninteractive
 echo "Asia/Kolkata" > /etc/timezone
 dpkg-reconfigure -f noninteractive tzdata
 # echo "[INFO] Updating packages..."
-# apt-get update &&
-# apt-get upgrade -y
+apt-get update &&
+apt-get upgrade -y
 
 # 3. Install dependencies
 echo "[INFO] Installing required packages..."
