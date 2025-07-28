@@ -2,6 +2,11 @@
 #define NETWORK_H
 #include "transaction.h"
 #include "tangle.h"
+
+using WsClient = websocketpp::client<websocketpp::config::asio_client>;
+using ConnectionHdl = websocketpp::connection_hdl;
+using MessagePtr = websocketpp::config::asio_client::message_type::ptr;
+
 // void startServer(Tangle& tangle);
 void broadcastTransaction(const Tangle& tangle);
 void sendTangle(const Tangle& tangle, WsClient& client, const ConnectionHdl& hdl);

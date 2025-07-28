@@ -28,8 +28,15 @@ const std::string KEYFILE_PUB = "keys/node.pub";
 
 
 
-void simulateSmartMeter(Tangle &tangle)
+void simulateSmartMeter(Tangle &tangle, Peers &peers)
 {
+    // Simulate a smart meter generating transactions
+    // This function will run in a separate thread to simulate real-time data generation
+    cout << "[LOG] Starting smart meter simulation..." << endl;
+
+    // Generate random transactions and broadcast them to the Tangle
+    // This simulates a smart meter generating energy transactions
+
     random_device rd;
     mt19937 gen(rd());
     uniform_real_distribution<> energyDist(0.5, 5.0);
@@ -45,9 +52,9 @@ void simulateSmartMeter(Tangle &tangle)
         Transaction newTx;
 
         // receiver is selected randomly from the list of active peers
-        string receiver = getPeerList()[rand() % getPeerList().size()].id;                                                                                                                                    
+        string receiver = peers.getPeerList()[rand() % peers.getPeerList().size()].id;                                                                                                                                    
         
-        newTx.data.timestamp = to_string(time(nullptr));
+        newTx.data.timestamp = time(nullptr);
         newTx.data.timestampInt = static_cast<int>(time(nullptr));
         newTx.data.sender = getenv("UID"); // Use UID from environment variable
         newTx.data.receiver = receiver;
@@ -174,13 +181,12 @@ int main()
 
     // thread serverThread(startServer, ref(tangle));
     // thread simulationThread(simulateSmartMeter, ref(tangle));
-    
+    Peers pd(9000, tangle);
     // THREAD 1: WS server
     auto serverWrapper = [&]()
     {
         try
         {
-            Peers pd(9000, tangle);
             pd.findPeers(5); // Discover up to 5 peers
         }
         catch (std::exception &ex)

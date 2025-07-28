@@ -5,6 +5,7 @@
 #include <random>
 #include <sstream>
 #include <cstring>
+#include <mutex>
 #include <json/json.h> // using jsoncpp
 #include "tangle.h"
 #include "network.h"

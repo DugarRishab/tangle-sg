@@ -2,9 +2,11 @@
 #define TANGLE_H
 #include "transaction.h"
 #include <unordered_map>
-class Tangle {
++ #include<mutex> class Tangle
+{
 public:
     void addNewTransaction(const Transaction& tx);
+    void addTransaction(const Transaction& tx);
     void updateCumulativeWeight(const std::string& transaction_id);
     std::string serialize() const; // Converts the Tangle to a string format
     std::string serializeTransaction(const Transaction& tx) const; // Serializes a single transaction

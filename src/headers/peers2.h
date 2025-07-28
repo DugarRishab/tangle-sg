@@ -9,6 +9,7 @@
 #include <chrono>
 #include <unordered_map>
 #include <memory>
+#include <mutex>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -16,6 +17,7 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <openssl/hmac.h>
+#include <json/json.h>
 #include "tangle.h"
 
 #include <websocketpp/config/asio_no_tls_client.hpp>
@@ -24,6 +26,8 @@
 // Alias for WebSocket++ client
 using WsClient = websocketpp::client<websocketpp::config::asio_client>;
 using WebSocketPtr = std::shared_ptr<WsClient>;
+
+using namespace std;
 
 // Represents a generic message to send to a peer
 struct Message
@@ -38,7 +42,7 @@ struct Peer
 	std::string address; // IP address
 	int port;			 // Port number
 	websocketpp::connection_hdl hdl; // WebSocket connection handle
-	WsClient* client
+	WsClient *client;
 };
 
 extern std::vector<Peer> activePeers; // Global sotre for active WebSocket connections
@@ -47,7 +51,7 @@ extern std::vector<Peer> activePeers; // Global sotre for active WebSocket conne
 class Peers
 {
 public:
-	Peers(int port = 9000, Tangle &tangle);
+	Peers(int port, Tangle &tangle);
 	~Peers();
 
 	
@@ -85,7 +89,7 @@ private:
 	void sendUDPPacket(const std::string &data, const sockaddr_in &addr);
 
 	// Discovery
-	void sendUDPBroadcast(const string &data);
+	void sendUDPBroadcast(const std::string &data);
 	std::vector<Peer> listenDiscovery(int maxPeers, int maxTimeLimitMs);
 
 	// Handshake phases

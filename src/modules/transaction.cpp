@@ -11,7 +11,7 @@ using namespace std;
 // because the transaction object contains metadata that is not part of the signature
 // HENCE msg = serializeTransactionData(tx)
 // and not serializeTransaction(tx)
-auto signTransaction = [&](const std::string &msg)
+string signTransaction(const std::string &msg)
 {	
 	std::vector<unsigned char> sig(crypto_sign_BYTES);
 
@@ -28,7 +28,7 @@ auto signTransaction = [&](const std::string &msg)
 	return to_base64(sig.data(), sig.size());
 };
 
-auto verifyTransaction = [&](const std::string &msg, const std::string &sig_b64, const std::string &uid)
+bool verifyTransaction(const std::string &msg, const std::string &sig_b64, const std::string &uid)
 {
 	// auto pk = from_base64(getenv("PK_b64"));
 	auto pk = from_base64(uid);
