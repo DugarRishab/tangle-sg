@@ -2,7 +2,7 @@
 CXX = g++
 PYTHON_CONFIG = python3-config
 CXXFLAGS = -std=c++17 -Wall -Wextra -I src/headers 
-LDFLAGS = -lssl -lcrypto -lpthread -ljsoncpp -lboost_system -lboost_thread
+LDFLAGS = -lssl -lcrypto -lpthread -ljsoncpp -lboost_system -lboost_thread -lsodium
 
 
 # Directories
@@ -12,7 +12,7 @@ HEADERS_DIR = src/headers
 BUILD_DIR = build
 
 # Source and object files
-SRC = $(SRC_DIR)/main.cpp $(MODULES_DIR)/pow.cpp $(MODULES_DIR)/tsa.cpp $(MODULES_DIR)/network.cpp $(MODULES_DIR)/tangle.cpp $(MODULES_DIR)/peers2.cpp
+SRC = $(SRC_DIR)/main.cpp $(MODULES_DIR)/pow.cpp $(MODULES_DIR)/tsa.cpp $(MODULES_DIR)/network.cpp $(MODULES_DIR)/tangle.cpp $(MODULES_DIR)/peers2.cpp $(MODULES_DIR)/transaction.cpp
 OBJ = $(patsubst %.cpp, $(BUILD_DIR)/%.o, $(notdir $(SRC)))
 EXEC = tangle_poc
 

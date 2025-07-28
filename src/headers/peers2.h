@@ -70,8 +70,16 @@ private:
 	int64_t NONCE_A; // Nonce for handshake
 	std::string UID_A; // Unique identifier for this node
 
+	// TODO: using a standard Ed25519 tool
+	// ed25519 - keygen
+	// -- output - public node_X.pub -> 32bit public key
+	// -- output - private node_X.key -> 64bit private key
+
+	// then -> UID = Base58(PublicKey)
+
 	// Utility
 	void addPeer(const Peer &peer);
+
 	uint64_t generateNonce();
 	std::string computeHMAC(const std::string &data);
 	void sendUDPPacket(const std::string &data, const sockaddr_in &addr);
