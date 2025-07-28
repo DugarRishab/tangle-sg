@@ -1,6 +1,5 @@
 # Compiler
 CXX = g++
-PYTHON_CONFIG = python3-config
 CXXFLAGS = -std=c++17 -Wall -Wextra -I src/headers 
 LDFLAGS = -lssl -lcrypto -lpthread -ljsoncpp -lboost_system -lboost_thread -lsodium
 

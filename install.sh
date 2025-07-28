@@ -15,7 +15,7 @@ apt-get upgrade -y
 
 # 3. Install dependencies
 echo "[INFO] Installing required packages..."
-apt-get install -y libssl-dev build-essential libwebsocketpp-dev libboost-all-dev libcurl4-openssl-dev libjsoncpp-dev lsodium																																											
+apt-get install -y libssl-dev build-essential libwebsocketpp-dev libboost-all-dev libcurl4-openssl-dev libjsoncpp-dev libsodium-dev																																											
 
 # 4. Install Python modules via pip (use --break-system-packages only if needed)
 # echo "[INFO] Installing Python libraries..."
