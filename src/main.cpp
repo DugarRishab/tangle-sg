@@ -59,10 +59,10 @@ void simulateSmartMeter(Tangle &tangle)
         newTx.metadata.lastUpdated = time(nullptr);
         newTx.metadata.cumulative_weight = 0; // Initialize cumulative weight
 
-        cout << "[LOG] Generating new transaction: " << newTx.transaction_id << " at:" << newTx.timestamp << endl;
+        cout << "[LOG] Generating new transaction: " << newTx.data.transaction_id << " at:" << newTx.data.timestamp << endl;
         auto start = chrono::high_resolution_clock::now();
         // Compute PoW for new transaction
-        performPoW(newTx.transaction_id, 2);
+        performPoW(newTx.data.transaction_id, 2);
 
         // Add the new transaction
         tangle.addNewTransaction(newTx);
@@ -70,7 +70,7 @@ void simulateSmartMeter(Tangle &tangle)
         auto end = chrono::high_resolution_clock::now();
         auto elapsed = duration<double, milli>(end - start).count();
 
-        cout << "[LOG] Transaction " << newTx.transaction_id << " added to Tangle." << endl;
+        cout << "[LOG] Transaction " << newTx.data.transaction_id << " added to Tangle." << endl;
         cout << "Time elapsed:" << elapsed << " ms" << endl;
 
         broadcastTransaction(tangle);
