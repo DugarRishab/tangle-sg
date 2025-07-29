@@ -7,10 +7,10 @@ std::vector<std::string> selectTips(Tangle& tangle) {
     std::string weakest_tx = "";
 
     for (const auto& pair : tangle.transactions) {
-        if (pair.second.validating_transactions.empty()) {
+        if (pair.second.metadata.cumulative_weight == 0) {
             tips.push_back(pair.first);
-        } else if (pair.second.cumulative_weight < min_weight) {
-            min_weight = pair.second.cumulative_weight;
+        } else if (pair.second.metadata.cumulative_weight< min_weight) {
+            min_weight = pair.second.metadata.cumulative_weight;
             weakest_tx = pair.first;
         }
     }
