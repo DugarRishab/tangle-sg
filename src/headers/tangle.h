@@ -2,7 +2,8 @@
 #define TANGLE_H
 #include "transaction.h"
 #include <unordered_map>
-+ #include<mutex> class Tangle
+#include<mutex> 
+class Tangle
 {
 public:
     void addNewTransaction(const Transaction& tx);

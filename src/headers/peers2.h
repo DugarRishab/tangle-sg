@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <openssl/hmac.h>
-#include <json/json.h>
+#include <jsoncpp/json/json.h>
 #include "tangle.h"
 
 #include <websocketpp/config/asio_no_tls_client.hpp>

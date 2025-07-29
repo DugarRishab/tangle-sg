@@ -1,8 +1,11 @@
 # Compiler
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -I src/headers 
-LDFLAGS = -lssl -lcrypto -lpthread -ljsoncpp -lboost_system -lboost_thread -lsodium
-
+CXXFLAGS  := -std=c++17 -Wall -Wextra \
+              -I src/headers \
+              $(shell pkg-config --cflags jsoncpp)
+LDFLAGS   := -lssl -lcrypto -lpthread \
+              $(shell pkg-config --libs jsoncpp) \
+              -lboost_system -lboost_thread -lsodium
 
 # Directories
 SRC_DIR = src
