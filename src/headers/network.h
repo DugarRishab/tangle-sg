@@ -3,6 +3,9 @@
 #include "transaction.h"
 #include "tangle.h"
 
+#include <websocketpp/config/asio_no_tls_client.hpp>
+#include <websocketpp/client.hpp>
+
 using WsClient = websocketpp::client<websocketpp::config::asio_client>;
 using ConnectionHdl = websocketpp::connection_hdl;
 using MessagePtr = websocketpp::config::asio_client::message_type::ptr;

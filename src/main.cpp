@@ -202,7 +202,7 @@ int main()
         try
         {
             std::cout << "[THREAD] simulateSmartMeter() beginning…\n";
-            simulateSmartMeter(std::ref(tangle)); // your existing function
+            simulateSmartMeter(std::ref(tangle), std::ref(pd)); // your existing function
             std::cout << "[THREAD] simulateSmartMeter() returned!\n";
         }
         catch (const std::exception &ex)

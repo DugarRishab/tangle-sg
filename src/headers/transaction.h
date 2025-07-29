@@ -34,6 +34,6 @@ struct Transaction
 };
 
 bool signTransaction(const std::string &msg);
-auto verifyTransaction = [&](const std::string &msg, const std::string &sig_b64);
+auto verifyTransaction(const std::string &msg, const std::string &sig_b64);
 
 #endif
