@@ -19,6 +19,6 @@ void broadcastMessage(const std::string& message, const std::string& messageType
 void sendMessage(const std::string& message, const std::string& messageType, WsClient& client, const ConnectionHdl& hdl);
 void printLastTransaction(Tangle& tangle);
 bool verifyChecksum(const std::string& data, const std::string& receivedChecksum);
-string computeChecksum(const std::string& data);
+std::string computeChecksum(const std::string& data);
 
 #endif

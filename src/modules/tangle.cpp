@@ -30,7 +30,7 @@ bool verifyChecksum(const string &data, const string &receivedChecksum)
     return calculatedChecksum == receivedChecksum;
 }
 
-void Tangle::addNewTransaction(const Transaction &tx)
+Transaction Tangle::addNewTransaction(const Transaction &tx)
 {
     // calculate checksum
     string txData = serializeTransactionData(tx);
@@ -51,6 +51,8 @@ void Tangle::addNewTransaction(const Transaction &tx)
     // Lock the mutex to protect shared Tangle access
     lock_guard<mutex> lock(tangleMutex);
     transactions[tx.data.transaction_id] = tx;
+
+    return tx
 
 }
 void Tangle::addTransaction(const Transaction &tx)

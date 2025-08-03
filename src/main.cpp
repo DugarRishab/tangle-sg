@@ -72,15 +72,15 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers)
         performPoW(newTx.data.transaction_id, 2);
 
         // Add the new transaction
-        tangle.addNewTransaction(newTx);
+        Transaction finalTx = okaytangle.addNewTransaction(newTx);
 
         auto end = chrono::high_resolution_clock::now();
         auto elapsed = duration<double, milli>(end - start).count();
 
-        cout << "[LOG] Transaction " << newTx.data.transaction_id << " added to Tangle." << endl;
+        cout << "[LOG] Transaction " << finalTx.data.transaction_id << " added to Tangle." << endl;
         cout << "Time elapsed:" << elapsed << " ms" << endl;
 
-        broadcastTransaction(tangle);
+        broadcastTransaction(finalTx);
         this_thread::sleep_for(chrono::seconds(10));
     }
 }
