@@ -14,6 +14,7 @@
 #include <arpa/inet.h>
 #include <ctime>
 #include "../headers/peers2.h"
+#include "../headers/pow.h"
 #include "../headers/transaction.h"
 
 #include <websocketpp/config/asio_no_tls_client.hpp>
@@ -75,15 +76,14 @@ void printLastTransaction(Tangle &tangle)
     int seconds = static_cast<int>(elapsedSeconds);
 
     // Print the last transaction details
-    if (!lastTx)
+    if (!lastTx.data.transaction_id.empty())
     {
         cout << "[LOG] Last transaction received: ID = " << lastTx.data.transaction_id
              << ", Sender = " << lastTx.data.sender << endl
              << ", Receiver = " << lastTx.data.receiver << endl
              << ", Amount = " << lastTx.data.amount << " " << lastTx.data.unit << endl
              << ", Price per unit = " << lastTx.data.price_per_unit << " " << lastTx.data.currency << endl
-             
-             << ", Time since creation = " << seconds << " sec ago"
+             << ", Time since creation = " << minutes << " min, " << seconds % 60 << " sec ago"
              << endl;
     }
     else
@@ -186,7 +186,7 @@ void setupMessageReceiver(WsClient &client, Tangle &tangle)
                             
                             // TODO: if the transaction is only signed by sender,
 
-                            string txSearialized = tangle.serializeTransactionData(newTx);
+                            string txSearialized = tangle.Tangle::serializeTransactionData(newTx);
                             string sig_b64 = newTx.metadata.signature1;
 
                             if(verifyTransaction(txSearialized, sig_b64, newTx.data.sender)) // Verify signature 1 is sender's signature
@@ -224,7 +224,7 @@ void setupMessageReceiver(WsClient &client, Tangle &tangle)
                         else if(!newTx.metadata.signature1.empty() && !newTx.metadata.signature2.empty())
                         {
                             // TODO: verify each signature
-                            string txSearialized = tangle.serializeTransactionData(newTx);
+                            string txSearialized = tangle.Tangle::serializeTransactionData(newTx);
                             string sig1_b64 = newTx.metadata.signature1;
                             string sig2_b64 = newTx.metadata.signature2;
 
@@ -242,7 +242,7 @@ void setupMessageReceiver(WsClient &client, Tangle &tangle)
                             
                             tangle.addTransaction(newTx);
                             performPoW(newTx.data.transaction_id, 2);
-                            tangle.updateCumulativeWeight(newTx.data.transaction_id) // Increase cumulative weight for new transaction
+                            tangle.updateCumulativeWeight(newTx.data.transaction_id); // Increase cumulative weight for new transaction
                         }
 
                         cout << "[LOG] New transaction added to Tangle: " << newTx.data.transaction_id << endl;
@@ -280,7 +280,7 @@ void setupMessageReceiver(WsClient &client, Tangle &tangle)
 void broadcastTransaction(const Transaction &Tx)
 {
     // Serialize the transaction
-    string message = serializeTransaction(Tx);
+    string message = Tangle::serializeTransaction(Tx);
 
     string checksum = computeChecksum(message);
 
@@ -311,7 +311,7 @@ void sendTangle(const Tangle &tangle, WsClient &client, const ConnectionHdl &hdl
     Json::StreamWriterBuilder writer;
     string jsonString = Json::writeString(writer, jsonData);
 
-    sendMessage(jsonString, "SYNC_ACK", WsClient &client, const ConnectionHdl &hdl);
+    sendMessage(jsonString, "SYNC_ACK", client, hdl);
     cout << "[LOG][SYNC_ACK] Sent Tangle to peer ." << endl;
 }
 
