@@ -1,5 +1,5 @@
-#include "network.h"
-#include "tangle.h"
+#include "../headers/network.h"
+#include "../headers/tangle.h"
 #include <iostream>
 #include <vector>
 #include <thread>
@@ -13,7 +13,8 @@
 #include <iomanip>
 #include <arpa/inet.h>
 #include <ctime>
-#include "peers2.h"
+#include "../headers/peers2.h"
+#include "../headers/transaction.h"
 
 #include <websocketpp/config/asio_no_tls_client.hpp>
 #include <websocketpp/client.hpp>
@@ -74,7 +75,7 @@ void printLastTransaction(Tangle &tangle)
     int seconds = static_cast<int>(elapsedSeconds);
 
     // Print the last transaction details
-    if (!latestTimestamp.empty())
+    if (!lastTx)
     {
         cout << "[LOG] Last transaction received: ID = " << lastTx.data.transaction_id
              << ", Sender = " << lastTx.data.sender << endl
@@ -97,7 +98,7 @@ void handleTangleUpdate(std::string receivedData, Tangle &tangle)
     {
         {
             lock_guard<mutex> lock(tangleMutex);
-            tangle.updateFromSerialized(actualData);
+            tangle.updateFromSerialized(receivedData);
         }
         cout << "[LOG] Tangle update verified and applied." << endl;
         printLastTransaction(tangle);
@@ -169,7 +170,7 @@ void setupMessageReceiver(WsClient &client, Tangle &tangle)
                     {
                         cout << "[LOG] Received new transaction from peer: " << message << endl;
                         // Handle new transaction
-                        Transaction newTx = deserializeTransaction(tangleData);
+                        Transaction newTx = Tangle::deserializeTransaction(tangleData);
                         // TODO: verify checksum of tx
 
                         // TODO: check sign status of tx
@@ -200,7 +201,7 @@ void setupMessageReceiver(WsClient &client, Tangle &tangle)
                                 return;
                             }
                             // check if the receiver is same as the host node.
-                            const uid = getenv("UID");
+                            const std::string uid = getenv("UID");
                             // If yes, that means this node (the host node) is the receiver and must doubly sign the transaction
                             if(newTx.data.receiver == uid) // If receiver is the host node
                             {
@@ -326,7 +327,7 @@ void broadcastMessage(const string &message, const string &messageType)
         peer.client->send(peer.hdl, fullMessage, websocketpp::frame::opcode::text);
     }
 }
-void sendMessage(const string &message, const string &messageType, const WsClient &client, const ConnectionHdl &hdl)
+void sendMessage(const string &message, const string &messageType, WsClient &client, const ConnectionHdl &hdl)
 {
     // Construct the message with type prefix
     string fullMessage = messageType + ": " + message;

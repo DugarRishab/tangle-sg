@@ -80,7 +80,7 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id)
     }
 }
 
-string Tangle::serializeTransactionData(const Transaction &tx) const
+string Tangle::serializeTransactionData(const Transaction &tx)
 {
     stringstream ss;
     ss << tx.data.transaction_id << ","

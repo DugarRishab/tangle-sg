@@ -33,7 +33,7 @@ struct Transaction
     
 };
 
-bool signTransaction(const std::string &msg);
-auto verifyTransaction(const std::string &msg, const std::string &sig_b64);
+string signTransaction(const std::string &msg);
+bool verifyTransaction(const std::string &msg, const std::string &sig_b64, const std::string &uid);
 
 #endif
