@@ -101,7 +101,7 @@ private:
 	void responderLoop();
 	bool verifyHMAC(const Json::Value &msg);
 
-	Peer connectWebSocket(const Peer &peer);
+	Peer connectWebSocket( Peer &peer);
 	std::thread responderThread_;
 	
 };

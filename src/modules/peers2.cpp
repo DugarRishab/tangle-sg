@@ -140,7 +140,7 @@ void Peers::performHandshake(std::vector<Peer> &foundPeers)
 		ack["from"] = UID_A;
 		ack["nonce_B"] = (Json::UInt64)NONCE_B;
 		ack["hmac"] = HMAC3;
-		sendUDPPacket(Json::FastWriter().write(ack), inet.aton(p.address));
+		sendUDPPacket(Json::FastWriter().write(ack), inet_aton(p.address));
 		
 	}
 }
@@ -195,7 +195,7 @@ std::vector<Peer> Peers::listenDiscovery(int maxPeers, int maxTimeLimitMs)
 						p.id = msg["from"].asString();
 						p.address = inet_ntoa(sender.sin_addr);
 						p.port = msg.isMember("port") ? msg["port"].asInt() : 0;
-						p.nonce = msg["nonce_B"].asString();
+						p.nonce = msg["nonce_B"].asUInt64();
 
 						std::lock_guard<std::mutex> lock(foundMutex);
 
