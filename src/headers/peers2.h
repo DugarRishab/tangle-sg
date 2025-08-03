@@ -25,7 +25,7 @@
 #include <websocketpp/client.hpp>
 
 	// Alias for WebSocket++ client
-	using WsClient = websocketpp::client<websocketpp::config::asio_client>;
+using WsClient = websocketpp::client<websocketpp::config::asio_client>;
 using WebSocketPtr = std::shared_ptr<WsClient>;
 
 using namespace std;
@@ -44,6 +44,7 @@ struct Peer
 	int port;			 // Port number
 	websocketpp::connection_hdl hdl; // WebSocket connection handle
 	WsClient *client;
+	std::string nonce;
 };
 
 extern std::vector<Peer> activePeers; // Global sotre for active WebSocket connections
@@ -100,7 +101,7 @@ private:
 	void responderLoop();
 	bool verifyHMAC(const Json::Value &msg);
 
-	WebSocketPtr connectWebSocket(const Peer &peer);
+	Peer connectWebSocket(const Peer &peer);
 	std::thread responderThread_;
 	
 };

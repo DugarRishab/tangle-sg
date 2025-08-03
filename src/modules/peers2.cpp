@@ -44,7 +44,9 @@ Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true), tangle(tan
 
 	// Initialize nonce and HMAC values
 	std::random_device rd;
-	NONCE_A = std::mt19937_64 eng(rd());
+	std::mt19937_64 eng(rd());
+
+	NONCE_A = eng(rd());
 
 	// Setup UDP socket
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -127,6 +129,7 @@ void Peers::performHandshake(std::vector<Peer> &foundPeers)
 	// Phase 3: Send HS_ACK
 	for (const auto &p : foundPeers)
 	{
+		uint64_t NONCE_B = p.nonce;
 
 		std::ostringstream d3;
 		d3 << UID_A << p.id << NONCE_B;
@@ -136,7 +139,8 @@ void Peers::performHandshake(std::vector<Peer> &foundPeers)
 		ack["from"] = UID_A;
 		ack["nonce_B"] = (Json::UInt64)NONCE_B;
 		ack["hmac"] = HMAC3;
-		sendUDPPacket(Json::FastWriter().write(ack), p);
+		sendUDPPacket(Json::FastWriter().write(ack), p.address);
+		
 	}
 }
 
@@ -145,7 +149,7 @@ bool Peers::verifyHMAC(const Json::Value &msg)
 	if (!msg.isMember("from") || !msg.isMember("nonce_A") || !msg.isMember("nonce_B") || !msg.isMember("hmac"))
 		return false;
 
-	if (msg["nonce_A"] != NONCE_A)
+	if (msg["nonce_A"].asUInt64() != NONCE_A)
 		return false;
 
 	std::string peerId = msg["from"].asString();
@@ -190,6 +194,8 @@ std::vector<Peer> Peers::listenDiscovery(int maxPeers, int maxTimeLimitMs)
 						p.id = msg["from"].asString();
 						p.address = inet_ntoa(sender.sin_addr);
 						p.port = msg.isMember("port") ? msg["port"].asInt() : 0;
+						p.nonce = msg["nonce_B"].asString();
+
 						std::lock_guard<std::mutex> lock(foundMutex);
 
 						// Avoid duplicates
