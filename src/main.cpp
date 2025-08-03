@@ -72,7 +72,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers)
         performPoW(newTx.data.transaction_id, 2);
 
         // Add the new transaction
-        Transaction finalTx = okaytangle.addNewTransaction(newTx);
+        Transaction finalTx = tangle.addNewTransaction(newTx);
 
         auto end = chrono::high_resolution_clock::now();
         auto elapsed = duration<double, milli>(end - start).count();
