@@ -1,4 +1,4 @@
-// peers.cpp
+// peers2.cpp
 #include "peers2.h"
 #include <thread>
 #include <iostream>
@@ -6,7 +6,15 @@
 #include <sstream>
 #include <cstring>
 #include <mutex>
-#include <json/json.h> // using jsoncpp
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <openssl/hmac.h>
+#include <stdexcept>
+#include <cstdlib>
+#include <jsoncpp/json/json.h>
 #include "tangle.h"
 #include "network.h"
 
@@ -14,7 +22,7 @@ using namespace std;
 
 std::vector<Peer> activePeers; // Active WebSocket connections
 
-Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true)
+Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true), tangle(tangle)
 {
 	
 	// Load shared secret
@@ -100,7 +108,7 @@ std::string Peers::computeHMAC(const std::string &data)
 
 void Peers::sendUDPPacket(const std::string &data, const sockaddr_in &addr)
 {
-	sendto(sockfd_, data.data(), data.size(), 0, (sockaddr *)&addr, sizeof(addr));
+	sendto(sock, data.data(), data.size(), 0, (sockaddr *)&addr, sizeof(addr));
 }
 
 void Peers::sendUDPBroadcast(const string &data)
@@ -108,7 +116,7 @@ void Peers::sendUDPBroadcast(const string &data)
 
 	sockaddr_in broadcastAddr{};
 	broadcastAddr.sin_family = AF_INET;
-	broadcastAddr.sin_port = htons(PORT);
+	broadcastAddr.sin_port = htons(port_);
 	broadcastAddr.sin_addr.s_addr = inet_addr("255.255.255.255"); // Broadcast address
 
 	sendto(sock, data.c_str(), data.size(), 0, (sockaddr *)&broadcastAddr, sizeof(broadcastAddr));
@@ -247,7 +255,7 @@ void Peers::findPeers(int maxPeers, int maxTimeLimitMs)
 	// Phase 2: Listen for HS_RESPONSE
 	std::vector<Peer> foundPeers = listenDiscovery(5, maxTimeLimitMs); // 10 seconds timeout
 	if (foundPeers.empty())
-		return false;
+		return;
 
 	// Phase 3: Perform handshake with each found peer
 	performHandshake(foundPeers);
@@ -304,8 +312,8 @@ void Peers::responderLoop()
 				else if (type == "HS_ACK")
 				{ // Phase 3
 					uint64_t N2 = msg["nonce_B"].asUInt64();
-					std::string A_UID = msg["from"].asString()
-											std::string B_UID = UID_A;
+					std::string A_UID = msg["from"].asString();
+					std::string B_UID = UID_A;
 					std::string tag3 = msg["hmac"].asString();
 					// Verify
 					std::ostringstream d3;
@@ -326,7 +334,7 @@ void Peers::responderLoop()
 	}
 }
 
-Peer Peers::connectWebSocket(const Peer &peer)
+Peer Peers::connectWebSocket( Peer &peer)
 {
 	auto client = std::make_shared<WsClient>();
 	client->init_asio();

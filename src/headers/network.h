@@ -2,6 +2,7 @@
 #define NETWORK_H
 #include "transaction.h"
 #include "tangle.h"
+#include <string>
 
 #include <websocketpp/config/asio_no_tls_client.hpp>
 #include <websocketpp/client.hpp>

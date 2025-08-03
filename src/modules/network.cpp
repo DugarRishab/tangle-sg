@@ -11,12 +11,14 @@
 #include <openssl/sha.h>
 #include <sstream>
 #include <iomanip>
+#include <string>
+#include <unordered_map>
 #include <arpa/inet.h>
 #include <ctime>
 #include "../headers/peers2.h"
 #include "../headers/pow.h"
 #include "../headers/transaction.h"
-
+#include <json/json.h>
 #include <websocketpp/config/asio_no_tls_client.hpp>
 #include <websocketpp/client.hpp>
 
@@ -186,7 +188,7 @@ void setupMessageReceiver(WsClient &client, Tangle &tangle)
                             
                             // TODO: if the transaction is only signed by sender,
 
-                            string txSearialized = tangle.Tangle::serializeTransactionData(newTx);
+                            string txSearialized = Tangle::serializeTransactionData(newTx);
                             string sig_b64 = newTx.metadata.signature1;
 
                             if(verifyTransaction(txSearialized, sig_b64, newTx.data.sender)) // Verify signature 1 is sender's signature
@@ -224,7 +226,7 @@ void setupMessageReceiver(WsClient &client, Tangle &tangle)
                         else if(!newTx.metadata.signature1.empty() && !newTx.metadata.signature2.empty())
                         {
                             // TODO: verify each signature
-                            string txSearialized = tangle.Tangle::serializeTransactionData(newTx);
+                            string txSearialized = Tangle::serializeTransactionData(newTx);
                             string sig1_b64 = newTx.metadata.signature1;
                             string sig2_b64 = newTx.metadata.signature2;
 

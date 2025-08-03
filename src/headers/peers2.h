@@ -1,6 +1,6 @@
 // peers.h
-#ifndef PEERS_H
-#define PEERS_H
+#ifndef PEERS2_H
+#define PEERS2_H
 
 #include <string>
 #include <vector>
@@ -19,12 +19,13 @@
 #include <openssl/hmac.h>
 #include <jsoncpp/json/json.h>
 #include "tangle.h"
-
+#include <thread>
+#include <cstdint>
 #include <websocketpp/config/asio_no_tls_client.hpp>
 #include <websocketpp/client.hpp>
 
-// Alias for WebSocket++ client
-using WsClient = websocketpp::client<websocketpp::config::asio_client>;
+	// Alias for WebSocket++ client
+	using WsClient = websocketpp::client<websocketpp::config::asio_client>;
 using WebSocketPtr = std::shared_ptr<WsClient>;
 
 using namespace std;
@@ -73,6 +74,8 @@ private:
 	bool running_;
 	int64_t NONCE_A; // Nonce for handshake
 	std::string UID_A; // Unique identifier for this node
+
+	Tangle &tangle; // Reference to the Tangle object
 
 	// TODO: using a standard Ed25519 tool
 	// ed25519 - keygen

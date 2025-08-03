@@ -1,7 +1,9 @@
 #include "../headers/tsa.h"
 #include <climits>
+#include<vector>
+#include<string>
 
-using namespace std;
+    using namespace std;
 
 std::vector<std::string> selectTips(Tangle& tangle) {
     std::vector<std::string> tips;

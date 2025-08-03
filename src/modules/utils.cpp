@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <stdexcept> // for std::runtime_error
+#include <iterator> // for std::istreambuf_iterator
 
 using namespace std;
 

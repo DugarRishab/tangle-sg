@@ -2,8 +2,9 @@
 #include "../headers/tangle.h"
 #include "../headers/utils.h"
 #include <sodium.h>
-#include <fstream>
-#include <filesystem>
+#include <vector>
+#include <stdexcept>
+#include <cstdlib>
 
 using namespace std;
 
@@ -19,6 +20,11 @@ string signTransaction(const std::string &msg)
 	if (sk.size() != crypto_sign_SECRETKEYBYTES)
 	{
 		throw std::runtime_error("Invalid secret key size");
+	}
+
+	if (sodium_init() < 0)
+	{
+		throw std::runtime_error("Failed to initialize libsodium");
 	}
 
 	crypto_sign_detached(
@@ -37,7 +43,12 @@ bool verifyTransaction(const std::string &msg, const std::string &sig_b64, const
 	{
 		throw std::runtime_error("Invalid public key size");
 	}
-	
+
+	if (sodium_init() < 0)
+	{
+		throw std::runtime_error("Failed to initialize libsodium");
+	}
+
 	auto sig = from_base64(sig_b64);
 	return crypto_sign_verify_detached(
 			   sig.data(),

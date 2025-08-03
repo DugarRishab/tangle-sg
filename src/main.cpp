@@ -14,7 +14,8 @@
 #include "headers/peers2.h"
 #include "headers/utils.h"
 #include <fstream>
-#include <vector>
+#include <cstdlib> // getenv, setenv, rand
+#include <ctime>   // time_t, time()
 
 using namespace std;
 using namespace chrono;
@@ -66,13 +67,15 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers)
         newTx.metadata.lastUpdated = time(nullptr);
         newTx.metadata.cumulative_weight = 0; // Initialize cumulative weight
 
-        cout << "[LOG] Generating new transaction: " << newTx.data.transaction_id << " at:" << newTx.data.timestamp << endl;
+        
         auto start = chrono::high_resolution_clock::now();
         // Compute PoW for new transaction
         performPoW(newTx.data.transaction_id, 2);
 
         // Add the new transaction
         Transaction finalTx = tangle.addNewTransaction(newTx);
+
+        cout << "[LOG] Generating new transaction: " << finalTx.data.transaction_id << " at:" << finalTx.data.timestamp << endl;
 
         auto end = chrono::high_resolution_clock::now();
         auto elapsed = duration<double, milli>(end - start).count();
@@ -202,7 +205,7 @@ int main()
         try
         {
             std::cout << "[THREAD] simulateSmartMeter() beginning…\n";
-            simulateSmartMeter(std::ref(tangle), std::ref(pd)); // your existing function
+            simulateSmartMeter(tangle, pd); // your existing function
             std::cout << "[THREAD] simulateSmartMeter() returned!\n";
         }
         catch (const std::exception &ex)

@@ -3,9 +3,12 @@
 #include <iostream>
 #include <sstream>
 #include <ctime>
-#include<mutex>
+#include <mutex>
+#include <string>
+#include <unordered_map>
 #include <openssl/sha.h>
 #include <iomanip>
+
 
 using namespace std;
 
@@ -108,7 +111,7 @@ string Tangle::serializeTransactionData(const Transaction &tx)
 // Serializes the Tangle's transactions into a string format
 // each part is separated by a comma
 // and each transaction is separated by a semicolon
-string Tangle::serialize() const
+string Tangle::serialize()
 {
     stringstream ss;
 
@@ -119,7 +122,7 @@ string Tangle::serialize() const
     return ss.str();
 }
 
-string Tangle::serializeTransaction(const Transaction &tx) const
+string Tangle::serializeTransaction(const Transaction &tx)
 {
     stringstream ss;
     ss << tx.data.transaction_id << ","
@@ -150,7 +153,7 @@ string Tangle::serializeTransaction(const Transaction &tx) const
 }
 
 // Returns the Tangle's transactions in a deserialized format
-std::unordered_map<std::string, Transaction> Tangle::deserialze(const string &data)
+std::unordered_map<std::string, Transaction> Tangle::deserialize(const string &data)
 {
     stringstream ss(data);
     string line;
