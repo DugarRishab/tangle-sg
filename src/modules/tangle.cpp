@@ -5,6 +5,7 @@
 #include <ctime>
 #include<mutex>
 #include <openssl/sha.h>
+#include <iomanip>
 
 using namespace std;
 
@@ -30,7 +31,7 @@ bool verifyChecksum(const string &data, const string &receivedChecksum)
     return calculatedChecksum == receivedChecksum;
 }
 
-Transaction Tangle::addNewTransaction(const Transaction &tx)
+Transaction Tangle::addNewTransaction( Transaction &tx)
 {
     // calculate checksum
     string txData = serializeTransactionData(tx);
@@ -52,8 +53,7 @@ Transaction Tangle::addNewTransaction(const Transaction &tx)
     lock_guard<mutex> lock(tangleMutex);
     transactions[tx.data.transaction_id] = tx;
 
-    return tx
-
+    return tx;
 }
 void Tangle::addTransaction(const Transaction &tx)
 {
