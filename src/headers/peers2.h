@@ -43,7 +43,7 @@ struct Peer
 	std::string address; // IP address
 	int port;			 // Port number
 	websocketpp::connection_hdl hdl; // WebSocket connection handle
-	WsClient *client;
+	WebSocketPtr client;
 	uint64_t nonce;
 };
 

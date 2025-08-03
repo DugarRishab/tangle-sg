@@ -140,7 +140,15 @@ void Peers::performHandshake(std::vector<Peer> &foundPeers)
 		ack["from"] = UID_A;
 		ack["nonce_B"] = (Json::UInt64)NONCE_B;
 		ack["hmac"] = HMAC3;
-		sendUDPPacket(Json::FastWriter().write(ack), inet_aton(p.address));
+
+		sockaddr_in dest{};
+		dest.sin_family = AF_INET;
+		dest.sin_port = htons(p.port); // whatever port you intend
+		if (!inet_aton(p.address.c_str(), &dest.sin_addr))
+		{
+			throw std::runtime_error("Invalid peer IP: " + p.address);
+		}
+		sendUDPPacket(Json::FastWriter().write(ack), dest);
 		
 	}
 }
@@ -267,7 +275,7 @@ void Peers::findPeers(int maxPeers, int maxTimeLimitMs)
 	// Phase 3: Perform handshake with each found peer
 	performHandshake(foundPeers);
 
-	for (const auto &p : foundPeers)
+	for ( auto &p : foundPeers)
 	{
 		addPeer(p);
 		connectWebSocket(p);
@@ -355,7 +363,7 @@ Peer Peers::connectWebSocket( Peer &peer)
 
 	setupMessageReceiver(*client, tangle); // Set up message handler
 
-	client.connect(con);
+	client->connect(con);
 	std::thread([client]()
 				{ client->run(); })
 		.detach();
