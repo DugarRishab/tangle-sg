@@ -298,7 +298,7 @@ void broadcastTransaction(const Transaction &Tx)
     broadcastMessage(jsonString, "NEWTX");
     cout << "[LOG] Broadcasted new transaction to peers." << endl;
 }
-void sendTangle(const Tangle &tangle, WsClient &client, const ConnectionHdl &hdl)
+void sendTangle( Tangle &tangle, WsClient &client, const ConnectionHdl &hdl)
 {
     // Serialize the Tangle
     string message = tangle.serialize();
