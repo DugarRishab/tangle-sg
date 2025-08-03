@@ -13,7 +13,7 @@ public:
     void addTransaction(const Transaction& tx);
     void updateCumulativeWeight(const std::string& transaction_id);
     std::string serialize() const; // Converts the Tangle to a string format
-    static std::string serializeTransaction(const Transaction& tx) const; // Serializes a single transaction
+    static std::string serializeTransaction(const Transaction& tx); // Serializes a single transaction
     static string serializeTransactionData(const Transaction &tx); // Serializes transaction data
     std::unordered_map<std::string, Transaction> deserialze(const std::string &data); // Converts a string format back to Tangle's transactions
     static Transaction deserializeTransaction(const std::string& data); // Deserializes a single transaction
