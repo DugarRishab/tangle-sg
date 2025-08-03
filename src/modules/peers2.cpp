@@ -10,6 +10,8 @@
 #include "tangle.h"
 #include "network.h"
 
+using namespace std;
+
 std::vector<Peer> activePeers; // Active WebSocket connections
 
 Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true)

@@ -6,6 +6,8 @@
 #include <vector>
 #include <iostream>
 
+using namespace std;
+
 namespace fs = std::filesystem;
 
 // Read a binary file into a vector; returns empty vector on failure

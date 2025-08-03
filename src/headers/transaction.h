@@ -2,6 +2,9 @@
 #define TRANSACTION_H
 #include <string>
 #include <vector>
+
+using namespace std;
+
 struct tx_data
 {
     std::string transaction_id;
@@ -33,7 +36,7 @@ struct Transaction
     
 };
 
-string signTransaction(const std::string &msg);
+std::string signTransaction(const std::string &msg);
 bool verifyTransaction(const std::string &msg, const std::string &sig_b64, const std::string &uid);
 
 #endif

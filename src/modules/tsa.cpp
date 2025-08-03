@@ -1,6 +1,8 @@
 #include "../headers/tsa.h"
 #include <climits>
 
+using namespace std;
+
 std::vector<std::string> selectTips(Tangle& tangle) {
     std::vector<std::string> tips;
     int min_weight = INT_MAX;

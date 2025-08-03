@@ -2,7 +2,10 @@
 #define TANGLE_H
 #include "transaction.h"
 #include <unordered_map>
-#include<mutex> 
+#include<mutex>
+
+using namespace std;
+
 class Tangle
 {
 public:
