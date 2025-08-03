@@ -43,10 +43,11 @@ Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true), tangle(tan
 	UID_A = uid;
 
 	// Initialize nonce and HMAC values
-	std::random_device rd;
-	std::mt19937_64 eng(rd());
+	std::random_device rd;						  // Seed generator
+	std::mt19937_64 eng(rd());					  // Mersenne Twister seeded with rd
+	std::uniform_int_distribution<uint64_t> dist; // Uniform distribution over all uint64_t
 
-	NONCE_A = eng(rd());
+	NONCE_A = dist(eng);
 
 	// Setup UDP socket
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -139,7 +140,7 @@ void Peers::performHandshake(std::vector<Peer> &foundPeers)
 		ack["from"] = UID_A;
 		ack["nonce_B"] = (Json::UInt64)NONCE_B;
 		ack["hmac"] = HMAC3;
-		sendUDPPacket(Json::FastWriter().write(ack), p.address);
+		sendUDPPacket(Json::FastWriter().write(ack), inet.aton(p.address));
 		
 	}
 }

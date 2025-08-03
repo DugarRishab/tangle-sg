@@ -44,7 +44,7 @@ struct Peer
 	int port;			 // Port number
 	websocketpp::connection_hdl hdl; // WebSocket connection handle
 	WsClient *client;
-	std::string nonce;
+	uint64_t nonce;
 };
 
 extern std::vector<Peer> activePeers; // Global sotre for active WebSocket connections
@@ -73,7 +73,7 @@ private:
 	std::string secretK_; // HMAC secret
 
 	bool running_;
-	int64_t NONCE_A; // Nonce for handshake
+	uint64_t NONCE_A; // Nonce for handshake
 	std::string UID_A; // Unique identifier for this node
 
 	Tangle &tangle; // Reference to the Tangle object
