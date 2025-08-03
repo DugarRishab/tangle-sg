@@ -90,29 +90,16 @@ void printLastTransaction(Tangle &tangle)
     }
 }
 
-void handleTCPClient(std::string receivedData, Tangle &tangle)
+void handleTangleUpdate(std::string receivedData, Tangle &tangle)
 {
     if (!receivedData.empty())
     {
-        cout << "[LOG] Received Tangle update" << endl;
-        string receivedChecksum = receivedData.substr(receivedData.find_last_of(" ") + 1);
-        string actualData = receivedData.substr(0, receivedData.find_last_of(" "));
-
-
-        if (verifyChecksum(actualData, receivedChecksum))
         {
-            // tangle.updateFromSerialized(actualData);
-            {
-                lock_guard<mutex> lock(tangleMutex);
-                tangle.updateFromSerialized(actualData);
-            }
-            cout << "[LOG] Tangle update verified and applied." << endl;
-            printLastTransaction(tangle);
+            lock_guard<mutex> lock(tangleMutex);
+            tangle.updateFromSerialized(actualData);
         }
-        else
-        {
-            cerr << "[ERROR] Data corruption detected!" << endl;
-        }
+        cout << "[LOG] Tangle update verified and applied." << endl;
+        printLastTransaction(tangle);
     }
     else
     {
@@ -163,7 +150,7 @@ void setupMessageReceiver(WsClient &client, Tangle &tangle)
                         if (verifyChecksum(tangleData, checksum))
                         {
                             cout << "[LOG] Received valid Tangle update from peer." << endl;
-                            handleTCPClient(tangleData + " " + checksum, tangle);
+                            // handleTCPClient(tangleData + " " + checksum, tangle);
                         }
                         else
                         {
@@ -267,6 +254,12 @@ void setupMessageReceiver(WsClient &client, Tangle &tangle)
                         cout << "[LOG] Received SYNC_REQ from peer. Sending Tangle data." << endl;
                         // Respond with Tangle data
                         sendTangle(tangle, client, hdl);
+                    }
+                    if(messageType == "SYNC_ACK")
+                    {
+                        cout << "[LOG] Received SYNC_ACK from peer. Tangle data synchronized." << endl;
+                        // TODO: accept tangle data from peer
+                        handleTangleUpdate(tangleData + " " + checksum, tangle);
                     }
                 }
                 else
