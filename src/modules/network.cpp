@@ -53,18 +53,19 @@ bool verifyChecksum(const string &data, const string &receivedChecksum)
 void printLastTransaction(Tangle &tangle)
 {
     Transaction lastTx;
-    string latestTimestamp = "0";
+    time_t latestTimestamp = time(nullptr); // Initialize to current time
+
 
     for (const auto &pair : tangle.transactions)
     {
         if (pair.second.data.timestamp > latestTimestamp)
         {
-            latestTimestamp = pair.second.timestamp;
+            latestTimestamp = pair.second.data.timestamp;
             lastTx = pair.second;
         }
     }
 
-    time_t txTime = static_cast<time_t>(stoll(latestTimestamp));
+    time_t txTime = latestTimestamp;
     time_t currentTime = time(nullptr);
     double elapsedSeconds = difftime(currentTime, txTime);
 
