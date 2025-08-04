@@ -165,7 +165,7 @@ void Peers::sendUDPBroadcast(const string &data)
 	sockaddr_in broadcastAddr{};
 	broadcastAddr.sin_family = AF_INET;
 	broadcastAddr.sin_port = htons(port_);
-	broadcastAddr.sin_addr.s_addr = inet_addr(broadcastIP.c_str); // Broadcast address
+	broadcastAddr.sin_addr.s_addr = inet_addr(broadcastIP.c_str()); // Broadcast address
 
 	sendto(sock, data.c_str(), data.size(), 0, (sockaddr *)&broadcastAddr, sizeof(broadcastAddr));
 }
