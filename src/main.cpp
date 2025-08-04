@@ -47,8 +47,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers)
     while (i < 1000)
     {
         i++;
-        vector<string> parents = selectTips(tangle);
-
+        
         Transaction newTx;
 
         auto peerList = peers.getPeerList();
@@ -59,6 +58,8 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers)
             std::this_thread::sleep_for(std::chrono::seconds(5));
             continue; // skip this iteration until we have at least one
         }
+
+        vector<string> parents = selectTips(tangle);
 
         // receiver is selected randomly from the list of active peers
         string receiver = peers.getPeerList()[rand() % peers.getPeerList().size()].id;                                                                                                                                    

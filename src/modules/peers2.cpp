@@ -179,6 +179,7 @@ std::vector<Peer> Peers::listenDiscovery(int maxPeers, int maxTimeLimitMs)
 
 	auto listener = [&]()
 	{
+		std::cout << "Listening for peer discovery responses...\n";
 		char buf[2048];
 		sockaddr_in sender;
 		socklen_t slen = sizeof(sender);
@@ -187,6 +188,7 @@ std::vector<Peer> Peers::listenDiscovery(int maxPeers, int maxTimeLimitMs)
 			int n = recvfrom(sock, buf, sizeof(buf) - 1, 0, (sockaddr *)&sender, &slen);
 			if (n > 0)
 			{
+				std::cout << "Received discovery packet from " << inet_ntoa(sender.sin_addr) << ":" << ntohs(sender.sin_port) << "\n";
 				buf[n] = '\0';
 				Json::Value msg;
 				Json::Reader r;
@@ -195,6 +197,7 @@ std::vector<Peer> Peers::listenDiscovery(int maxPeers, int maxTimeLimitMs)
 					std::string type = msg["type"].asString();
 					if (type == "HS_RESPONSE")
 					{
+						std::cout << "HS_RESPONSE from " << msg["from"].asString() << "\n";
 
 						if (!verifyHMAC(msg))
 							continue;
@@ -219,9 +222,11 @@ std::vector<Peer> Peers::listenDiscovery(int maxPeers, int maxTimeLimitMs)
 						}
 						if (!exists)
 						{
+							std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
 							foundPeers.push_back(p);
 							if ((int)foundPeers.size() >= maxPeers)
 							{
+								std::cout << "Reached max peers limit: " << maxPeers << "\n";
 								done = true;
 								cv.notify_one();
 								break;
