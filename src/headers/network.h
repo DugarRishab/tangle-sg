@@ -12,6 +12,7 @@ using namespace std;
 using WsClient = websocketpp::client<websocketpp::config::asio_client>;
 using ConnectionHdl = websocketpp::connection_hdl;
 using MessagePtr = websocketpp::config::asio_client::message_type::ptr;
+using WebSocketPtr = std::shared_ptr<WsClient>;
 
 // void startServer(Tangle& tangle);
 void broadcastTransaction(const Transaction &Tx);
