@@ -440,7 +440,11 @@ void Peers::responderLoop()
 					std::cout << "HS_RESPONSE from " << msg["from"].asString() << "\n";
 
 					if (!verifyHMAC(msg))
+					{
+						std::cerr << "[ERROR] HMAC verification failed for HS_RESPONSE from " << msg["from"].asString() << "\n";
 						continue;
+					}
+						
 
 					Peer p;
 					p.id = msg["from"].asString();
@@ -479,7 +483,7 @@ void Peers::responderLoop()
 						addPeer(p);
 						connectWebSocket(p);
 						activePeers.push_back(p);
-						std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
+						std::cout << "Connected to peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
 					}
 					else
 					{
