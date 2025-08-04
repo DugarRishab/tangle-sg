@@ -24,7 +24,7 @@ std::vector<Peer> activePeers; // Active WebSocket connections
 
 Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true), tangle(tangle)
 {
-	
+
 	// Load HMAC secret
 	char *env = std::getenv("HMAC_SECRET");
 	if (!env)
@@ -169,32 +169,30 @@ void Peers::sendUDPBroadcast(const string &data)
 	sendto(sock, data.c_str(), data.size(), 0, (sockaddr *)&broadcastAddr, sizeof(broadcastAddr));
 }
 
-void Peers::performHandshake(std::vector<Peer> &foundPeers)
+bool Peers::performHandshake(Peer p)
 {
-	// Phase 3: Send HS_ACK
-	for (const auto &p : foundPeers)
+	uint64_t NONCE_B = p.nonce;
+
+	std::ostringstream d3;
+	d3 << UID_A << p.id << NONCE_B;
+	std::string HMAC3 = computeHMAC(d3.str());
+	Json::Value ack;
+	ack["type"] = "HS_ACK";
+	ack["from"] = UID_A;
+	ack["nonce_B"] = (Json::UInt64)NONCE_B;
+	ack["hmac"] = HMAC3;
+
+	sockaddr_in dest{};
+	dest.sin_family = AF_INET;
+	dest.sin_port = htons(p.port); // whatever port you intend
+	if (!inet_aton(p.address.c_str(), &dest.sin_addr))
 	{
-		uint64_t NONCE_B = p.nonce;
-
-		std::ostringstream d3;
-		d3 << UID_A << p.id << NONCE_B;
-		std::string HMAC3 = computeHMAC(d3.str());
-		Json::Value ack;
-		ack["type"] = "HS_ACK";
-		ack["from"] = UID_A;
-		ack["nonce_B"] = (Json::UInt64)NONCE_B;
-		ack["hmac"] = HMAC3;
-
-		sockaddr_in dest{};
-		dest.sin_family = AF_INET;
-		dest.sin_port = htons(p.port); // whatever port you intend
-		if (!inet_aton(p.address.c_str(), &dest.sin_addr))
-		{
-			throw std::runtime_error("Invalid peer IP: " + p.address);
-		}
-		sendUDPPacket(Json::FastWriter().write(ack), dest);
-		
+		throw std::runtime_error("Invalid peer IP: " + p.address);
+		return false;
 	}
+	sendUDPPacket(Json::FastWriter().write(ack), dest);
+
+	return true;
 }
 
 bool Peers::verifyHMAC(const Json::Value &msg)
@@ -213,101 +211,102 @@ bool Peers::verifyHMAC(const Json::Value &msg)
 	return computeHMAC(data.str()) == msg["hmac"].asString();
 }
 
-std::vector<Peer> Peers::listenDiscovery(int maxPeers, int maxTimeLimitMs)
-{
-	// const int maxTimeLimitMs = 10000; // 10 seconds
-	std::vector<Peer> foundPeers;
-	std::mutex foundMutex;
-	std::condition_variable cv;
-	bool done = false;
+// std::vector<Peer> Peers::listenDiscovery(int maxPeers, int maxTimeLimitMs)
+// {
+// 	// const int maxTimeLimitMs = 10000; // 10 seconds
+// 	std::vector<Peer> foundPeers;
+// 	std::mutex foundMutex;
+// 	std::condition_variable cv;
+// 	bool done = false;
 
-	auto listener = [&]()
-	{
-		std::cout << "Listening for peer discovery responses...\n";
-		char buf[2048];
-		sockaddr_in sender;
-		socklen_t slen = sizeof(sender);
-		while (true)
-		{
-			int n = recvfrom(sock, buf, sizeof(buf) - 1, 0, (sockaddr *)&sender, &slen);
-			if (n > 0)
-			{
-				std::cout << "Received discovery packet from " << inet_ntoa(sender.sin_addr) << ":" << ntohs(sender.sin_port) << "\n";
-				buf[n] = '\0';
-				Json::Value msg;
-				Json::Reader r;
-				if (r.parse(buf, msg))
-				{
-					std::string type = msg["type"].asString();
-					if (type == "HS_RESPONSE")
-					{
-						std::cout << "HS_RESPONSE from " << msg["from"].asString() << "\n";
+// 	auto listener = [&]()
+// 	{
+// 		std::cout << "Listening for peer discovery responses...\n";
+// 		char buf[2048];
+// 		sockaddr_in sender;
+// 		socklen_t slen = sizeof(sender);
+// 		while (true)
+// 		{
+// 			int n = recvfrom(sock, buf, sizeof(buf) - 1, 0, (sockaddr *)&sender, &slen);
+// 			if (n > 0)
+// 			{
+// 				std::cout << "Received discovery packet from " << inet_ntoa(sender.sin_addr) << ":" << ntohs(sender.sin_port) << "\n";
+// 				buf[n] = '\0';
+// 				Json::Value msg;
+// 				Json::Reader r;
+// 				if (r.parse(buf, msg))
+// 				{
+// 					std::string type = msg["type"].asString();
+// 					if (type == "HS_RESPONSE")
+// 					{
+// 						std::cout << "HS_RESPONSE from " << msg["from"].asString() << "\n";
 
-						if (!verifyHMAC(msg))
-							continue;
+// 						if (!verifyHMAC(msg))
+// 							continue;
 
-						Peer p;
-						p.id = msg["from"].asString();
-						p.address = inet_ntoa(sender.sin_addr);
-						p.port = msg.isMember("port") ? msg["port"].asInt() : 0;
-						p.nonce = msg["nonce_B"].asUInt64();
+// 						Peer p;
+// 						p.id = msg["from"].asString();
+// 						p.address = inet_ntoa(sender.sin_addr);
+// 						p.port = msg.isMember("port") ? msg["port"].asInt() : 0;
+// 						p.nonce = msg["nonce_B"].asUInt64();
 
-						std::lock_guard<std::mutex> lock(foundMutex);
+// 						std::lock_guard<std::mutex> lock(foundMutex);
 
-						// Avoid duplicates
-						bool exists = false;
-						for (const auto &fp : foundPeers)
-						{
-							if (fp.id == p.id)
-							{
-								exists = true;
-								break;
-							}
-						}
-						if (!exists)
-						{
-							std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
-							foundPeers.push_back(p);
-							if ((int)foundPeers.size() >= maxPeers)
-							{
-								std::cout << "Reached max peers limit: " << maxPeers << "\n";
-								done = true;
-								cv.notify_one();
-								break;
-							}
-						}
-					}
-					else {
-						std::cout << "Ignoring non-HS_RESPONSE packet of type: " << type << "\n";
-					}
-				}
-				else
-				{
-					std::cerr << "Failed to parse JSON from packet: " << buf << "\n";
-				}
-			}
-			{
-				std::lock_guard<std::mutex> lock(foundMutex);
-				if (done)
-					break;
-			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(50));
-		}
-	};
+// 						// Avoid duplicates
+// 						bool exists = false;
+// 						for (const auto &fp : foundPeers)
+// 						{
+// 							if (fp.id == p.id)
+// 							{
+// 								exists = true;
+// 								break;
+// 							}
+// 						}
+// 						if (!exists)
+// 						{
+// 							std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
+// 							foundPeers.push_back(p);
+// 							if ((int)foundPeers.size() >= maxPeers)
+// 							{
+// 								std::cout << "Reached max peers limit: " << maxPeers << "\n";
+// 								done = true;
+// 								cv.notify_one();
+// 								break;
+// 							}
+// 						}
+// 					}
+// 					else
+// 					{
+// 						std::cout << "Ignoring non-HS_RESPONSE packet of type: " << type << "\n";
+// 					}
+// 				}
+// 				else
+// 				{
+// 					std::cerr << "Failed to parse JSON from packet: " << buf << "\n";
+// 				}
+// 			}
+// 			{
+// 				std::lock_guard<std::mutex> lock(foundMutex);
+// 				if (done)
+// 					break;
+// 			}
+// 			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+// 		}
+// 	};
 
-	std::thread t(listener);
-	{
-		std::unique_lock<std::mutex> lock(foundMutex);
-		if (!cv.wait_for(lock, std::chrono::milliseconds(maxTimeLimitMs), [&]
-						 { return done || (int)foundPeers.size() >= maxPeers; }))
-		{
-			// Timed out
-			done = true;
-		}
-	}
-	t.join();
-	return foundPeers;
-}
+// 	std::thread t(listener);
+// 	{
+// 		std::unique_lock<std::mutex> lock(foundMutex);
+// 		if (!cv.wait_for(lock, std::chrono::milliseconds(maxTimeLimitMs), [&]
+// 						 { return done || (int)foundPeers.size() >= maxPeers; }))
+// 		{
+// 			// Timed out
+// 			done = true;
+// 		}
+// 	}
+// 	t.join();
+// 	return foundPeers;
+// }
 
 void Peers::findPeers(int maxPeers, int maxTimeLimitMs)
 {
@@ -323,21 +322,45 @@ void Peers::findPeers(int maxPeers, int maxTimeLimitMs)
 	sendUDPBroadcast(payload);
 	std::cout << "Broadcast sent: " << payload << "\n";
 
-	// Phase 2: Listen for HS_RESPONSE
-	std::vector<Peer> foundPeers = listenDiscovery(5, maxTimeLimitMs); // 10 seconds timeout
-	if (foundPeers.empty())
-		return;
+	// Phase 2: loop until time expires or we hit maxPeers
+	auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(maxTimeMs);
 
-	// Phase 3: Perform handshake with each found peer
-	performHandshake(foundPeers);
-
-	for ( auto &p : foundPeers)
+	while (peers_.size() + 1 < maxPeers)
 	{
-		addPeer(p);
-		connectWebSocket(p);
-		activePeers.push_back(p);
+		std::unique_lock<std::mutex> lk(foundMutex_);
 
-		std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
+		// wait until a peer arrives or time runs out
+		if (!foundCv_.wait_until(lk, deadline, [&]
+								 { return !foundPeers_.empty(); }))
+		{
+			// timeout
+			std::cout << "[discovery] Timeout reached; no more peers.\n";
+			break;
+		}
+
+		// there *is* at least one peer in foundPeers_
+		Peer p = std::move(foundPeers_.front());
+		foundPeers_.erase(foundPeers_.begin());
+		lk.unlock();
+
+		// Phase 3: immediately handshake with that single peer
+		std::cout << "[discovery] Handshaking with peer "
+				  << p.id << " at " << p.address << ":" << p.port << "\n";
+
+		// performHandshake can be adapted to handle one peer
+		if (performHandshake(p))
+		{
+			// on success, add to active list
+			addPeer(p);
+			connectWebSocket(p);
+			activePeers.push_back(p);
+			std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
+		}
+		else
+		{
+			std::cout << "[discovery] Handshake FAILED with "
+					  << p.id << " at " << p.address << ":" << p.port << "\n";
+		}
 	}
 
 	std::cout << "Discovery complete. Found " << peers_.size() << " peers.\n";
@@ -349,6 +372,7 @@ void Peers::responderLoop()
 	sockaddr_in sender;
 	socklen_t slen = sizeof(sender);
 	std::cout << "Responder loop started, listening for incoming packets...\n";
+
 	while (running_)
 	{
 		int n = recvfrom(sock, buf, sizeof(buf) - 1, 0, (sockaddr *)&sender, &slen);
@@ -372,7 +396,7 @@ void Peers::responderLoop()
 					std::ostringstream data;
 					data << A_UID << B_UID << N1 << N2;
 					std::string tag2 = computeHMAC(data.str());
-					
+
 					std::cout << "Responding to PEER_REQUEST from " << A_UID << "\n";
 					Json::Value resp;
 					resp["type"] = "HS_RESPONSE";
@@ -404,13 +428,56 @@ void Peers::responderLoop()
 						activePeers.push_back(p);
 					}
 				}
+				else if (type == "HS_RESPONSE")
+				{
+					std::cout << "HS_RESPONSE from " << msg["from"].asString() << "\n";
+
+					if (!verifyHMAC(msg))
+						continue;
+
+					Peer p;
+					p.id = msg["from"].asString();
+					p.address = inet_ntoa(sender.sin_addr);
+					p.port = msg.isMember("port") ? msg["port"].asInt() : 0;
+					p.nonce = msg["nonce_B"].asUInt64();
+
+					std::lock_guard<std::mutex> lock(foundMutex_);
+
+					// Avoid duplicates
+					bool exists = false;
+					for (const auto &fp : foundPeers_)
+					{
+						if (fp.id == p.id)
+						{
+							exists = true;
+							break;
+						}
+					}
+					if (!exists)
+					{
+						std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
+						foundPeers_.push_back(p);
+						foundCv_.notify_one();
+						// if ((int)foundPeers.size() >= maxPeers)
+						// {
+						// 	std::cout << "Reached max peers limit: " << maxPeers << "\n";
+						// 	done = true;
+						// 	cv.notify_one();
+						// 	break;
+						// }
+					}
+				}
+				else
+				{
+					std::cout << "Ignoring non-HS_RESPONSE packet of type: " << type << "\n";
+				}
 			}
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	}
 }
 
-Peer Peers::connectWebSocket( Peer &peer)
+Peer Peers::connectWebSocket(Peer &peer)
 {
 	auto client = std::make_shared<WsClient>();
 	client->init_asio();

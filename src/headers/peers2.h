@@ -80,6 +80,10 @@ private:
 
 	Tangle &tangle; // Reference to the Tangle object
 
+	std::vector<Peer> foundPeers_;
+	std::mutex foundMutex_;
+	std::condition_variable foundCv_;
+
 	// TODO: using a standard Ed25519 tool
 	// ed25519 - keygen
 	// -- output - public node_X.pub -> 32bit public key
@@ -96,10 +100,10 @@ private:
 
 	// Discovery
 	void sendUDPBroadcast(const std::string &data);
-	std::vector<Peer> listenDiscovery(int maxPeers, int maxTimeLimitMs);
+	// std::vector<Peer> listenDiscovery(int maxPeers, int maxTimeLimitMs);
 
 	// Handshake phases
-	void performHandshake(std::vector<Peer> &foundPeers);
+	bool performHandshake(Peer p);
 	void responderLoop();
 	bool verifyHMAC(const Json::Value &msg);
 
