@@ -51,17 +51,17 @@ Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true), tangle(tan
 	NONCE_A = dist(eng);
 
 	// Set base IP from environment variable
-	const char *ip_base = std::getenv("BASE_URL").c_str();
+	const char *ip_base = std::getenv("BASE_IP");
 	if (!env_base)
 	{
-		std::cerr << "ERROR: BASE_URL environment variable not set\n";
-		return 1;
+		std::cerr << "ERROR: BASE_IP environment variable not set\n";
+		throw std::runtime_error("BASE_IP not set");
 	}
 	baseIP = ip_base;
 
 	// Set broadcast IP
 	std::vector<int> octets;
-	std::istringstream iss(base);
+	std::istringstream iss(baseIP);
 	std::string token;
 	while (std::getline(iss, token, '.'))
 	{
@@ -74,14 +74,14 @@ Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true), tangle(tan
 		}
 		catch (...)
 		{
-			std::cerr << "ERROR: Invalid BASE_URL format: " << base << "\n";
-			return 2;
+			std::cerr << "ERROR: Invalid BASE_IP format: " << base << "\n";
+			throw std::runtime_error("Invalid BASE_IP format");
 		}
 	}
 	if (octets.size() != 4)
 	{
-		std::cerr << "ERROR: BASE_URL must have 4 octets: " << base << "\n";
-		return 3;
+		std::cerr << "ERROR: BASE_IP must have 4 octets: " << base << "\n";
+		throw std::runtime_error("Invalid BASE_IP format");
 	}
 
 	octets[3] = 255;
