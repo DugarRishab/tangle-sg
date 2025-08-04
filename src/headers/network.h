@@ -16,7 +16,7 @@ using WebSocketPtr = std::shared_ptr<WsClient>;
 
 // void startServer(Tangle& tangle);
 void broadcastTransaction(const Transaction &Tx);
-void sendTangle(const Tangle &tangle, WebSocketPtr client, const ConnectionHdl &hdl);
+void sendTangle(Tangle &tangle, WebSocketPtr client, const ConnectionHdl &hdl);
 void handleTangleUpdate(std::string receivedData, Tangle& tangle);
 void setupMessageReceiver(WebSocketPtr client, Tangle &tangle);
 void broadcastMessage(const std::string& message, const std::string& messageType);
