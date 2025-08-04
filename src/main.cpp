@@ -51,6 +51,15 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers)
 
         Transaction newTx;
 
+        auto peerList = peers.getPeerList();
+
+        if (peerList.empty())
+        {
+            std::cout << "[WARN] Still no peers—waiting before generating transactions…\n";
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            continue; // skip this iteration until we have at least one
+        }
+
         // receiver is selected randomly from the list of active peers
         string receiver = peers.getPeerList()[rand() % peers.getPeerList().size()].id;                                                                                                                                    
         
