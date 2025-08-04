@@ -323,9 +323,9 @@ void Peers::findPeers(int maxPeers, int maxTimeLimitMs)
 	std::cout << "Broadcast sent: " << payload << "\n";
 
 	// Phase 2: loop until time expires or we hit maxPeers
-	auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(maxTimeLimitMs);
+	// auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(maxTimeLimitMs);
 
-	while (peers_.size() + 1 < maxPeers)
+	// while (peers_.size() + 1 < maxPeers)
 	{
 		std::unique_lock<std::mutex> lk(foundMutex_);
 
@@ -363,7 +363,7 @@ void Peers::findPeers(int maxPeers, int maxTimeLimitMs)
 		}
 	}
 
-	std::cout << "Discovery complete. Found " << peers_.size() << " peers.\n";
+	// std::cout << "Discovery complete. Found " << peers_.size() << " peers.\n";
 }
 
 void Peers::responderLoop()
@@ -392,7 +392,7 @@ void Peers::responderLoop()
 					std::cout << "Ignoring packet from self: " << UID_A << "\n";
 					continue; // Ignore packets from self
 				}
-				
+
 				if (type == "PEER_REQUEST")
 				{
 					// generate N2 and HMAC
@@ -448,7 +448,7 @@ void Peers::responderLoop()
 					p.port = msg.isMember("port") ? msg["port"].asInt() : 0;
 					p.nonce = msg["nonce_B"].asUInt64();
 
-					std::lock_guard<std::mutex> lock(foundMutex_);
+					// std::lock_guard<std::mutex> lock(foundMutex_);
 
 					// Avoid duplicates
 					bool exists = false;
@@ -457,14 +457,14 @@ void Peers::responderLoop()
 						if (fp.id == p.id)
 						{
 							exists = true;
-							break;
+							continue; // Skip if already exists
 						}
 					}
 					if (!exists)
 					{
 						std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
-						foundPeers_.push_back(p);
-						foundCv_.notify_one();
+						// foundPeers_.push_back(p);
+						// foundCv_.notify_one();
 						// if ((int)foundPeers.size() >= maxPeers)
 						// {
 						// 	std::cout << "Reached max peers limit: " << maxPeers << "\n";
@@ -472,6 +472,22 @@ void Peers::responderLoop()
 						// 	cv.notify_one();
 						// 	break;
 						// }
+
+						if (performHandshake(p))
+						{
+							// on success, add to active list
+							addPeer(p);
+							connectWebSocket(p);
+							activePeers.push_back(p);
+							std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
+						}
+						else
+						{
+							std::cout << "[discovery] Handshake FAILED with "
+									  << p.id << " at " << p.address << ":" << p.port << "\n";
+						}
+
+
 					}
 				}
 				else
