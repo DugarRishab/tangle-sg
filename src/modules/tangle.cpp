@@ -89,7 +89,7 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id)
 string Tangle::serializeTransactionData(const Transaction &tx)
 {
 
-    lock_guard<mutex> lock(tangleMutex);
+    
     stringstream ss;
     ss << tx.data.transaction_id << ","
        << tx.data.timestamp << ","
