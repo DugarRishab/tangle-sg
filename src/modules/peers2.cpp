@@ -326,42 +326,42 @@ void Peers::findPeers(int maxPeers, int maxTimeLimitMs)
 	// auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(maxTimeLimitMs);
 
 	// while (peers_.size() + 1 < maxPeers)
-	{
-		std::unique_lock<std::mutex> lk(foundMutex_);
+	// {
+	// 	std::unique_lock<std::mutex> lk(foundMutex_);
 
-		// wait until a peer arrives or time runs out
-		if (!foundCv_.wait_until(lk, deadline, [&]
-								 { return !foundPeers_.empty(); }))
-		{
-			// timeout
-			std::cout << "[discovery] Timeout reached; no more peers.\n";
-			break;
-		}
+	// 	// wait until a peer arrives or time runs out
+	// 	if (!foundCv_.wait_until(lk, deadline, [&]
+	// 							 { return !foundPeers_.empty(); }))
+	// 	{
+	// 		// timeout
+	// 		std::cout << "[discovery] Timeout reached; no more peers.\n";
+	// 		break;
+	// 	}
 
-		// there *is* at least one peer in foundPeers_
-		Peer p = std::move(foundPeers_.front());
-		foundPeers_.erase(foundPeers_.begin());
-		lk.unlock();
+	// 	// there *is* at least one peer in foundPeers_
+	// 	Peer p = std::move(foundPeers_.front());
+	// 	foundPeers_.erase(foundPeers_.begin());
+	// 	lk.unlock();
 
-		// Phase 3: immediately handshake with that single peer
-		std::cout << "[discovery] Handshaking with peer "
-				  << p.id << " at " << p.address << ":" << p.port << "\n";
+	// 	// Phase 3: immediately handshake with that single peer
+	// 	std::cout << "[discovery] Handshaking with peer "
+	// 			  << p.id << " at " << p.address << ":" << p.port << "\n";
 
-		// performHandshake can be adapted to handle one peer
-		if (performHandshake(p))
-		{
-			// on success, add to active list
-			addPeer(p);
-			connectWebSocket(p);
-			activePeers.push_back(p);
-			std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
-		}
-		else
-		{
-			std::cout << "[discovery] Handshake FAILED with "
-					  << p.id << " at " << p.address << ":" << p.port << "\n";
-		}
-	}
+	// 	// performHandshake can be adapted to handle one peer
+	// 	if (performHandshake(p))
+	// 	{
+	// 		// on success, add to active list
+	// 		addPeer(p);
+	// 		connectWebSocket(p);
+	// 		activePeers.push_back(p);
+	// 		std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
+	// 	}
+	// 	else
+	// 	{
+	// 		std::cout << "[discovery] Handshake FAILED with "
+	// 				  << p.id << " at " << p.address << ":" << p.port << "\n";
+	// 	}
+	// }
 
 	// std::cout << "Discovery complete. Found " << peers_.size() << " peers.\n";
 }
