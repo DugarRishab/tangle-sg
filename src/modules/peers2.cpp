@@ -25,7 +25,7 @@ std::vector<Peer> activePeers; // Active WebSocket connections
 Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true), tangle(tangle)
 {
 	
-	// Load shared secret
+	// Load HMAC secret
 	char *env = std::getenv("HMAC_SECRET");
 	if (!env)
 	{
@@ -34,6 +34,7 @@ Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true), tangle(tan
 	}
 	secretK_ = env ? env : "";
 
+	// Load UID from environment
 	char *uid = std::getenv("UID");
 	if (!uid)
 	{
@@ -48,6 +49,50 @@ Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true), tangle(tan
 	std::uniform_int_distribution<uint64_t> dist; // Uniform distribution over all uint64_t
 
 	NONCE_A = dist(eng);
+
+	// Set base IP from environment variable
+	const char *ip_base = std::getenv("BASE_URL").c_str();
+	if (!env_base)
+	{
+		std::cerr << "ERROR: BASE_URL environment variable not set\n";
+		return 1;
+	}
+	baseIP = ip_base;
+
+	// Set broadcast IP
+	std::vector<int> octets;
+	std::istringstream iss(base);
+	std::string token;
+	while (std::getline(iss, token, '.'))
+	{
+		try
+		{
+			int val = std::stoi(token);
+			if (val < 0 || val > 255)
+				throw std::out_of_range("octet");
+			octets.push_back(val);
+		}
+		catch (...)
+		{
+			std::cerr << "ERROR: Invalid BASE_URL format: " << base << "\n";
+			return 2;
+		}
+	}
+	if (octets.size() != 4)
+	{
+		std::cerr << "ERROR: BASE_URL must have 4 octets: " << base << "\n";
+		return 3;
+	}
+
+	octets[3] = 255;
+
+	// 4) Reassemble and print
+	std::ostringstream bcast;
+	bcast << octets[0] << "."
+		  << octets[1] << "."
+		  << octets[2] << "."
+		  << octets[3];
+	broadcastIP = bcast.str();
 
 	// Setup UDP socket
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -120,7 +165,7 @@ void Peers::sendUDPBroadcast(const string &data)
 	sockaddr_in broadcastAddr{};
 	broadcastAddr.sin_family = AF_INET;
 	broadcastAddr.sin_port = htons(port_);
-	broadcastAddr.sin_addr.s_addr = inet_addr("255.255.255.255"); // Broadcast address
+	broadcastAddr.sin_addr.s_addr = inet_addr(broadcastIP); // Broadcast address
 
 	sendto(sock, data.c_str(), data.size(), 0, (sockaddr *)&broadcastAddr, sizeof(broadcastAddr));
 }

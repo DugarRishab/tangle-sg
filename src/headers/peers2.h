@@ -68,6 +68,8 @@ private:
 
 	mutable std::mutex queueMutex_, peersMutex_;
 
+	std::string baseIP, broadcastIP;
+
 	int sock;
 	int port_;
 	std::string secretK_; // HMAC secret
