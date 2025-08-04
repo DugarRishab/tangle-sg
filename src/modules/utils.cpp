@@ -1,4 +1,4 @@
-#include "headers/utils.h"
+#include "../headers/utils.h"
 #include <filesystem>
 #include <sodium.h>
 #include <fstream>
