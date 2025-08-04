@@ -451,44 +451,43 @@ void Peers::responderLoop()
 					// std::lock_guard<std::mutex> lock(foundMutex_);
 
 					// Avoid duplicates
-					bool exists = false;
-					for (const auto &fp : foundPeers_)
+					// bool exists = false;
+					// for (const auto &fp : foundPeers_)
+					// {
+					// 	if (fp.id == p.id)
+					// 	{
+					// 		exists = true;
+					// 		continue; // Skip if already exists
+					// 	}
+					// }
+					// if (!exists)
+					// {
+					std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
+					// foundPeers_.push_back(p);
+					// foundCv_.notify_one();
+					// if ((int)foundPeers.size() >= maxPeers)
+					// {
+					// 	std::cout << "Reached max peers limit: " << maxPeers << "\n";
+					// 	done = true;
+					// 	cv.notify_one();
+					// 	break;
+					// }
+
+					if (performHandshake(p))
 					{
-						if (fp.id == p.id)
-						{
-							exists = true;
-							continue; // Skip if already exists
-						}
-					}
-					if (!exists)
-					{
+						// on success, add to active list
+						addPeer(p);
+						connectWebSocket(p);
+						activePeers.push_back(p);
 						std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
-						// foundPeers_.push_back(p);
-						// foundCv_.notify_one();
-						// if ((int)foundPeers.size() >= maxPeers)
-						// {
-						// 	std::cout << "Reached max peers limit: " << maxPeers << "\n";
-						// 	done = true;
-						// 	cv.notify_one();
-						// 	break;
-						// }
-
-						if (performHandshake(p))
-						{
-							// on success, add to active list
-							addPeer(p);
-							connectWebSocket(p);
-							activePeers.push_back(p);
-							std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
-						}
-						else
-						{
-							std::cout << "[discovery] Handshake FAILED with "
-									  << p.id << " at " << p.address << ":" << p.port << "\n";
-						}
-
-
 					}
+					else
+					{
+						std::cout << "[discovery] Handshake FAILED with "
+								  << p.id << " at " << p.address << ":" << p.port << "\n";
+					}
+
+					// }
 				}
 				else
 				{
