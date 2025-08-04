@@ -99,7 +99,7 @@ void handleTangleUpdate(std::string receivedData, Tangle &tangle)
     if (!receivedData.empty())
     {
         {
-            lock_guard<mutex> lock(tangleMutex);
+            
             tangle.updateFromSerialized(receivedData);
         }
         cout << "[LOG] Tangle update verified and applied." << endl;
