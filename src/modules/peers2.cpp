@@ -323,7 +323,7 @@ void Peers::findPeers(int maxPeers, int maxTimeLimitMs)
 	std::cout << "Broadcast sent: " << payload << "\n";
 
 	// Phase 2: loop until time expires or we hit maxPeers
-	auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(maxTimeMs);
+	auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(maxTimeLimitMs);
 
 	while (peers_.size() + 1 < maxPeers)
 	{
