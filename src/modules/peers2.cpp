@@ -361,7 +361,7 @@ Peer Peers::connectWebSocket( Peer &peer)
 
 	websocketpp::connection_hdl hdl = con->get_handle();
 
-	setupMessageReceiver(*client, tangle); // Set up message handler
+	setupMessageReceiver(client, tangle); // Set up message handler
 
 	client->connect(con);
 	std::thread([client]()

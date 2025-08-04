@@ -111,9 +111,9 @@ void handleTangleUpdate(std::string receivedData, Tangle &tangle)
     }
 }
 
-void setupMessageReceiver(WebSocketPtr &client, Tangle &tangle)
+void setupMessageReceiver(WebSocketPtr client, Tangle &tangle)
 {
-    client.set_message_handler(
+    client->set_message_handler(
         [&](ConnectionHdl hdl, MessagePtr msg)
         {
             // 1) Identify which peer sent it (if you’ve mapped hdl → peerId):
@@ -298,7 +298,7 @@ void broadcastTransaction(const Transaction &Tx)
     broadcastMessage(jsonString, "NEWTX");
     cout << "[LOG] Broadcasted new transaction to peers." << endl;
 }
-void sendTangle(Tangle &tangle, WebSocketPtr &client, const ConnectionHdl &hdl)
+void sendTangle(Tangle &tangle, WebSocketPtr client, const ConnectionHdl &hdl)
 {
     // Serialize the Tangle
     string message = tangle.serialize();
@@ -329,7 +329,7 @@ void broadcastMessage(const string &message, const string &messageType)
         peer.client->send(peer.hdl, fullMessage, websocketpp::frame::opcode::text);
     }
 }
-void sendMessage(const string &message, const string &messageType, WebSocketPtr &client, const ConnectionHdl &hdl)
+void sendMessage(const string &message, const string &messageType, WebSocketPtr client, const ConnectionHdl &hdl)
 {
     // Construct the message with type prefix
     string fullMessage = messageType + ": " + message;
