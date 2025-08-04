@@ -386,6 +386,13 @@ void Peers::responderLoop()
 			{
 				std::string type = msg["type"].asString();
 				std::cout << "Packet type: " << type << "\n";
+
+				if (msg["from"].asString() == UID_A)
+				{
+					std::cout << "Ignoring packet from self: " << UID_A << "\n";
+					continue; // Ignore packets from self
+				}
+				
 				if (type == "PEER_REQUEST")
 				{
 					// generate N2 and HMAC
