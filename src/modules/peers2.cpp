@@ -52,7 +52,7 @@ Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true), tangle(tan
 
 	// Set base IP from environment variable
 	const char *ip_base = std::getenv("BASE_IP");
-	if (!env_base)
+	if (!ip_base)
 	{
 		std::cerr << "ERROR: BASE_IP environment variable not set\n";
 		throw std::runtime_error("BASE_IP not set");
@@ -74,19 +74,18 @@ Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true), tangle(tan
 		}
 		catch (...)
 		{
-			std::cerr << "ERROR: Invalid BASE_IP format: " << base << "\n";
+			std::cerr << "ERROR: Invalid BASE_IP format: " << baseIP << "\n";
 			throw std::runtime_error("Invalid BASE_IP format");
 		}
 	}
 	if (octets.size() != 4)
 	{
-		std::cerr << "ERROR: BASE_IP must have 4 octets: " << base << "\n";
+		std::cerr << "ERROR: BASE_IP must have 4 octets: " << baseIP << "\n";
 		throw std::runtime_error("Invalid BASE_IP format");
 	}
 
 	octets[3] = 255;
 
-	// 4) Reassemble and print
 	std::ostringstream bcast;
 	bcast << octets[0] << "."
 		  << octets[1] << "."
