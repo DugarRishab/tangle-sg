@@ -348,17 +348,20 @@ void Peers::responderLoop()
 	char buf[2048];
 	sockaddr_in sender;
 	socklen_t slen = sizeof(sender);
+	std::cout << "Responder loop started, listening for incoming packets...\n";
 	while (running_)
 	{
 		int n = recvfrom(sock, buf, sizeof(buf) - 1, 0, (sockaddr *)&sender, &slen);
 		if (n > 0)
 		{
+			std::cout << "Received packet from " << inet_ntoa(sender.sin_addr) << ":" << ntohs(sender.sin_port) << "\n";
 			buf[n] = '\0';
 			Json::Value msg;
 			Json::Reader r;
 			if (r.parse(buf, msg))
 			{
 				std::string type = msg["type"].asString();
+				std::cout << "Packet type: " << type << "\n";
 				if (type == "PEER_REQUEST")
 				{
 					// generate N2 and HMAC
@@ -369,7 +372,8 @@ void Peers::responderLoop()
 					std::ostringstream data;
 					data << A_UID << B_UID << N1 << N2;
 					std::string tag2 = computeHMAC(data.str());
-
+					
+					std::cout << "Responding to PEER_REQUEST from " << A_UID << "\n";
 					Json::Value resp;
 					resp["type"] = "HS_RESPONSE";
 					resp["from"] = B_UID;
@@ -378,6 +382,7 @@ void Peers::responderLoop()
 					resp["hmac"] = tag2;
 					resp["port"] = port_;
 					std::string out = Json::FastWriter().write(resp);
+					std::cout << "Sending HS_RESPONSE: " << out << "\n";
 					sendUDPPacket(out, sender);
 				}
 				else if (type == "HS_ACK")
