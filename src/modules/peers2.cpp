@@ -277,6 +277,13 @@ std::vector<Peer> Peers::listenDiscovery(int maxPeers, int maxTimeLimitMs)
 							}
 						}
 					}
+					else {
+						std::cout << "Ignoring non-HS_RESPONSE packet of type: " << type << "\n";
+					}
+				}
+				else
+				{
+					std::cerr << "Failed to parse JSON from packet: " << buf << "\n";
 				}
 			}
 			{
