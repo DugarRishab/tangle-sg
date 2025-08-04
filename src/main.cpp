@@ -24,6 +24,7 @@ namespace fs = std::filesystem;
 
 const std::string KEYFILE_PRIV = "keys/node.key";
 const std::string KEYFILE_PUB = "keys/node.pub";
+const std::string HMAC_SECRET_FILE = "secret/hmac_secret.txt";
 
 
 
@@ -86,6 +87,68 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers)
     }
 }
 
+std::string loadOrCreateHMACSecret(const std::string &path)
+{
+    namespace fs = std::filesystem;
+    std::string secret;
+
+    // 1) Try to read existing file
+    if (fs::exists(path))
+    {
+        std::ifstream in(path, std::ios::in | std::ios::binary);
+        if (in && std::getline(in, secret) && !secret.empty())
+        {
+            // got it!
+        }
+        else
+        {
+            std::cerr << "[WARN] Could not read HMAC secret from " << path
+                      << " (empty or unreadable). Generating new.\n";
+            secret.clear();
+        }
+    }
+
+    // 2) If missing or invalid, generate & save
+    if (secret.empty())
+    {
+        // crypto_auth_KEYBYTES is the recommended length for HMAC-SHA256 keys
+        std::vector<unsigned char> key(crypto_auth_KEYBYTES);
+        randombytes_buf(key.data(), key.size());
+
+        // hex-encode
+        std::ostringstream oss;
+        oss << std::hex << std::setfill('0');
+        for (auto byte : key)
+        {
+            oss << std::setw(2) << static_cast<int>(byte);
+        }
+        secret = oss.str();
+
+        // ensure directory exists
+        fs::path p(path);
+        if (p.has_parent_path())
+            fs::create_directories(p.parent_path());
+
+        // write atomically
+        std::ofstream out(path, std::ios::out | std::ios::binary | std::ios::trunc);
+        if (!out)
+        {
+            throw std::runtime_error("Failed to open HMAC secret file for writing: " + path);
+        }
+        out << secret << "\n";
+        out.close();
+        std::cout << "[INFO] Generated and saved new HMAC secret to " << path << "\n";
+    }
+
+    // 3) Export into environment
+    if (setenv("HMAC_SECRET", secret.c_str(), /*overwrite=*/1) != 0)
+    {
+        throw std::runtime_error("Failed to set HMAC_SECRET environment variable");
+    }
+
+    return secret;
+}
+
 int main()
 {
     if (sodium_init() < 0)
@@ -139,6 +202,17 @@ int main()
         std::cerr << "Failed to set environment variables\n";
     } else {
         std::cout << "Exported PK_b64, SK_b64, and UID to environment.\n";
+    }
+
+    try
+    {
+        std::string secret = loadOrCreateHMACSecret(HMAC_SECRET_FILE);
+        // Now getenv("HMAC_SECRET") will return this hex string.
+    }
+    catch (const std::exception &ex)
+    {
+        std::cerr << "[FATAL] " << ex.what() << "\n";
+        return 1;
     }
 
     // TODO FOR DOCKNET: using a standard Ed25519 tool
