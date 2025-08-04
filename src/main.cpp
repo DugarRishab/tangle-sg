@@ -161,6 +161,8 @@ std::string loadOrCreateHMACSecret(const std::string &path)
 
 int main()
 {
+    std::cout.setf(std::ios::unitbuf);
+    
     if (sodium_init() < 0)
     {
         std::cerr << "Failed to init libsodium\n";
