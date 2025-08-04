@@ -69,6 +69,9 @@ void Tangle::addTransaction(const Transaction &tx)
 }
 void Tangle::updateCumulativeWeight(const std::string &transaction_id)
 {
+
+    lock_guard<mutex> lock(tangleMutex);
+
     transactions[transaction_id].metadata.cumulative_weight++;
     transactions[transaction_id].metadata.lastUpdated = time(nullptr);
     // Update cumulative weight for all parents
@@ -85,6 +88,8 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id)
 
 string Tangle::serializeTransactionData(const Transaction &tx)
 {
+
+    lock_guard<mutex> lock(tangleMutex);
     stringstream ss;
     ss << tx.data.transaction_id << ","
        << tx.data.timestamp << ","
@@ -124,6 +129,7 @@ string Tangle::serialize()
 
 string Tangle::serializeTransaction(const Transaction &tx)
 {
+    
     stringstream ss;
     ss << tx.data.transaction_id << ","
        << tx.data.timestamp << ","
@@ -269,7 +275,7 @@ void Tangle::updateFromSerialized(const string &data)
         {
             newTx.data.parents.push_back(prevTx);
         }
-
+        lock_guard<mutex> lock(tangleMutex);
         // Add the new transaction to the Tangle
         transactions[newTx.data.transaction_id] = newTx;
         lastTx = newTx; // Keep track of the last transaction for cumulative weight updates

@@ -21,8 +21,6 @@ using namespace std;
 using namespace chrono;
 namespace fs = std::filesystem;
 
-// global mutex to protect the shared Tangle
-std::mutex tangleMutex;
 
 const std::string KEYFILE_PRIV = "keys/node.key";
 const std::string KEYFILE_PUB = "keys/node.pub";
