@@ -19,7 +19,9 @@
 #include "../headers/pow.h"
 #include "../headers/transaction.h"
 #include <json/json.h>
-#include <websocketpp/config/asio_no_tls_client.hpp>
+
+#include <websocketpp/config/asio_no_tls.hpp>
+#include <websocketpp/server.hpp>
 #include <websocketpp/client.hpp>
 
 using namespace std;

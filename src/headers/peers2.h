@@ -19,7 +19,7 @@
 #include <openssl/hmac.h>
 #include <jsoncpp/json/json.h>
 #include "tangle.h"
-#include "network.h"
+
 #include <thread>
 #include <cstdint>
 #include <websocketpp/config/asio_no_tls_client.hpp>
@@ -30,6 +30,8 @@
 // using WebSocketPtr = std::shared_ptr<WsClient>;
 
 using namespace std;
+
+class Network; // forward declaration of class to prevent circular dependency with Peers
 
 // Represents a generic message to send to a peer
 struct Message
