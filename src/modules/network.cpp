@@ -31,13 +31,8 @@ using ConnectionHdl = websocketpp::connection_hdl;
 using MessagePtr = websocketpp::config::asio_client::message_type::ptr;
 using WsServer = websocketpp::server<websocketpp::config::asio>;
 
-enum class ConnectionType // to determine the connection type
-{
-    Client,
-    Server
-};
 
-Network::Network(uint16_t wsPort = 9000, Tangle &tangle) : wsPort(wsPort), tangle(tangle)
+Network::Network(uint16_t ws_port, Tangle &tangle) : ws_port(ws_port), tangle(tangle)
 {
     initServer();
     initClient();
@@ -161,7 +156,7 @@ void Network::handleTangleUpdate(std::string receivedData)
     }
 }
 
-void Network::handleIncomingMessage(ConnectionHdl hdl, std::string &payload, ConnectionType type)
+void Network::handleIncomingMessage(ConnectionHdl hdl, const std::string &payload, ConnectionType type)
 {
     size_t pos = payload.find(":");
     if (pos != string::npos)
@@ -346,7 +341,7 @@ void Network::sendTangle(const ConnectionHdl &hdl, ConnectionType connectionType
 void Network::connectWebSocket(Peer &peer)
 {
     websocketpp::lib::error_code ec;
-    auto uri = "ws://" + peer.address + ":" + std::to_string(wsPort);
+    auto uri = "ws://" + peer.address + ":" + std::to_string(ws_port);
     auto con = client->get_connection(uri, ec);
     if (ec){
         throw std::runtime_error(ec.message());

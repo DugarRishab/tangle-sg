@@ -34,7 +34,7 @@ public:
 	static void broadcastTransaction(const Transaction &Tx);
 	static void sendTangle(const ConnectionHdl &hdl, ConnectionType connectionType);
 	static void handleTangleUpdate(std::string receivedData);
-	void handleIncomingMessage(ConnectionHdl hdl, std::string &payload, ConnectionType type);
+	void handleIncomingMessage(ConnectionHdl hdl, const std::string &payload, ConnectionType type);
 	void broadcastMessage(const std::string &message, const std::string &messageType);
 	void sendMessage(const string &message, const string &messageType, const ConnectionHdl &hdl, const ConnectionType connectionType);
 	static void printLastTransaction();
@@ -47,7 +47,7 @@ private:
 	std::shared_ptr<WsClient> client;
 	std::shared_ptr<WsServer> server;
 
-	Tangle tangle;
+	Tangle &tangle;
 
 	void initClient();
 	void initServer();
