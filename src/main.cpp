@@ -28,7 +28,7 @@ const std::string HMAC_SECRET_FILE = "secret/hmac_secret.txt";
 
 
 
-void simulateSmartMeter(Tangle &tangle, Peers &peers)
+void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 {
     // Simulate a smart meter generating transactions
     // This function will run in a separate thread to simulate real-time data generation
@@ -92,7 +92,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers)
         cout << "[LOG] Transaction " << finalTx.data.transaction_id << " added to Tangle." << endl;
         cout << "Time elapsed:" << elapsed << " ms" << endl;
 
-        broadcastTransaction(finalTx);
+        net.broadcastTransaction(finalTx);
         this_thread::sleep_for(chrono::seconds(10));
     }
 }
@@ -262,8 +262,8 @@ int main()
         
         tangle.addTransaction(genesis);
     }
-    
-    Network net(9000, tangle)
+
+    Network net(9000, tangle);
 
     Peers pd(9001, tangle, net); // 9000 is for WS, 9001 is for UDP
     // THREAD 1: WS server
@@ -286,7 +286,7 @@ int main()
         try
         {
             std::cout << "[THREAD] simulateSmartMeter() beginning…\n";
-            simulateSmartMeter(tangle, pd); // your existing function
+            simulateSmartMeter(tangle, pd, net); // your existing function
             std::cout << "[THREAD] simulateSmartMeter() returned!\n";
         }
         catch (const std::exception &ex)

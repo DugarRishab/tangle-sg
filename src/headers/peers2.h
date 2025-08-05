@@ -19,14 +19,15 @@
 #include <openssl/hmac.h>
 #include <jsoncpp/json/json.h>
 #include "tangle.h"
+#include "network.h"
 #include <thread>
 #include <cstdint>
 #include <websocketpp/config/asio_no_tls_client.hpp>
 #include <websocketpp/client.hpp>
 
-	// Alias for WebSocket++ client
-using WsClient = websocketpp::client<websocketpp::config::asio_client>;
-using WebSocketPtr = std::shared_ptr<WsClient>;
+// 	// Alias for WebSocket++ client
+// using WsClient = websocketpp::client<websocketpp::config::asio_client>;
+// using WebSocketPtr = std::shared_ptr<WsClient>;
 
 using namespace std;
 
@@ -43,7 +44,6 @@ struct Peer
 	std::string address; // IP address
 	websocketpp::connection_hdl client_hdl; // WebSocket connection handle
 	websocketpp::connection_hdl server_hdl;
-
 	uint64_t nonce;
 };
 

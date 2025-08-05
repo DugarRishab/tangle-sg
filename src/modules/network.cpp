@@ -35,7 +35,7 @@ enum class ConnectionType // to determine the connection type
     Server
 };
 
-Network::Network(uint16_t wsPort = 9000, Tangle tangle) : wsPort(wsPort), tangle(tangle)
+Network::Network(uint16_t wsPort = 9000, Tangle &tangle) : wsPort(wsPort), tangle(tangle)
 {
     initServer();
     initClient();
