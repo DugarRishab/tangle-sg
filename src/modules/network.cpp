@@ -351,6 +351,8 @@ void Network::connectWebSocket(Peer &peer)
     peer.client_hdl = con->get_handle();
 
     client->connect(con);
+
+    std::cout << "Websocket connected to peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
 }
 
 // General function to send a message to all active peers. Input - Message and Message Type
@@ -377,10 +379,18 @@ void Network::sendMessage(const string &message, const string &messageType, cons
     // Construct the message with type prefix
     string fullMessage = messageType + ": " + message;
 
-    if (connectionType == ConnectionType::Client)
-        client->send(hdl, fullMessage, websocketpp::frame::opcode::text);
-    else if (connectionType == ConnectionType::Server)
-        server->send(hdl, fullMessage, websocketpp::frame::opcode::text);
+    try
+    {
+        if (connectionType == ConnectionType::Client)
+            client->send(hdl, fullMessage, websocketpp::frame::opcode::text);
+        else if (connectionType == ConnectionType::Server)
+            server->send(hdl, fullMessage, websocketpp::frame::opcode::text);
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << "[ERROR][SEND MESSAGE]" << e.what() << '\n';
+    }
+    
 
     cout << "[LOG] Sent message to peer: " << fullMessage << endl;
 }

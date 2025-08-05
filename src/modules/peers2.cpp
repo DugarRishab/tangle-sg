@@ -487,7 +487,8 @@ void Peers::responderLoop()
 						addPeer(p);
 						net.connectWebSocket(p);
 						activePeers.push_back(p);
-						std::cout << "Connected to peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
+						std::cout << "Peer added: " << p.id << " at " << p.address << ":" << p.port << "\n";
+						std::cout << "Total connected Peers: " << activePeers.size() + 1 << "\n";
 					}
 					else
 					{
