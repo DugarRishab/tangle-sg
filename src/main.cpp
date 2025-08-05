@@ -262,13 +262,10 @@ int main()
         
         tangle.addTransaction(genesis);
     }
-    // // Compute PoW separately
-    // genesis.proof_of_work = performPoW(genesis.transaction_id, 2);
-    // tangle.addTransaction(genesis);
+    
+    Network net(9000, tangle)
 
-    // thread serverThread(startServer, ref(tangle));
-    // thread simulationThread(simulateSmartMeter, ref(tangle));
-    Peers pd(9000, tangle);
+    Peers pd(9001, tangle, net); // 9000 is for WS, 9001 is for UDP
     // THREAD 1: WS server
     auto serverWrapper = [&]()
     {

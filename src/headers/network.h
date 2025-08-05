@@ -2,6 +2,8 @@
 #define NETWORK_H
 #include "transaction.h"
 #include "tangle.h"
+#include "peers2.h"
+
 #include <string>
 
 #include <websocketpp/config/asio_no_tls_client.hpp>
@@ -13,16 +15,43 @@ using WsClient = websocketpp::client<websocketpp::config::asio_client>;
 using ConnectionHdl = websocketpp::connection_hdl;
 using MessagePtr = websocketpp::config::asio_client::message_type::ptr;
 using WebSocketPtr = std::shared_ptr<WsClient>;
+using WsServer = websocketpp::server<websocketpp::config::asio>;
+
+enum class ConnectionType // to determine the connection type
+{
+	Client,
+	Server
+};
+
+class Network
+{
+
+public:
+	Network(uint16_t wsPort, Tangle tangle);
+	~Network();
+
+	static void broadcastTransaction(const Transaction &Tx);
+	static void sendTangle(const ConnectionHdl &hdl, ConnectionType connectionType);
+	static void handleTangleUpdate(std::string receivedData);
+	void handleIncomingMessage(ConnectionHdl hdl, std::string &payload, ConnectionType type);
+	void broadcastMessage(const std::string &message, const std::string &messageType);
+	void sendMessage(const string &message, const string &messageType, const ConnectionHdl &hdl, const ConnectionType connectionType);
+	static void printLastTransaction();
+	static bool verifyChecksum(const std::string &data, const std::string &receivedChecksum);
+	static std::string computeChecksum(const std::string &data);
+	void connectWebSocket(Peer &peer);
+
+private:
+	uint16_t ws_port;
+	std::shared_ptr<WsClient> client;
+	std::shared_ptr<WsServer> server;
+
+	Tangle tangle;
+
+	void initClient();
+	void initServer();
+}
 
 // void startServer(Tangle& tangle);
-void broadcastTransaction(const Transaction &Tx);
-void sendTangle(Tangle &tangle, WebSocketPtr client, const ConnectionHdl &hdl);
-void handleTangleUpdate(std::string receivedData, Tangle& tangle);
-void setupMessageReceiver(WebSocketPtr client, Tangle &tangle);
-void broadcastMessage(const std::string& message, const std::string& messageType);
-void sendMessage(const std::string &message, const std::string &messageType, WebSocketPtr client, const ConnectionHdl &hdl);
-void printLastTransaction(Tangle& tangle);
-bool verifyChecksum(const std::string& data, const std::string& receivedChecksum);
-std::string computeChecksum(const std::string& data);
 
 #endif

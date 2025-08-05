@@ -41,19 +41,19 @@ struct Peer
 {
 	std::string id;		 // UID of the peer
 	std::string address; // IP address
-	int port;			 // Port number
-	websocketpp::connection_hdl hdl; // WebSocket connection handle
-	WebSocketPtr client;
+	websocketpp::connection_hdl client_hdl; // WebSocket connection handle
+	websocketpp::connection_hdl server_hdl;
+
 	uint64_t nonce;
 };
 
-extern std::vector<Peer> activePeers; // Global sotre for active WebSocket connections
+extern std::vector<Peer> activePeers; // Global store for active WebSocket connections
 
 // Manages peers, discovery, HMAC-based handshake, and outgoing queue
 class Peers
 {
 public:
-	Peers(int port, Tangle &tangle);
+	Peers(int port, Tangle &tangle, Network &net);
 	~Peers();
 
 	
@@ -79,6 +79,7 @@ private:
 	std::string UID_A; // Unique identifier for this node
 
 	Tangle &tangle; // Reference to the Tangle object
+	Network &net; // Reference to the Network object
 
 	std::vector<Peer> foundPeers_;
 	std::mutex foundMutex_;
@@ -107,7 +108,7 @@ private:
 	void responderLoop();
 	bool verifyHMAC(const Json::Value &msg);
 
-	Peer connectWebSocket( Peer &peer);
+	
 	std::thread responderThread_;
 	
 };

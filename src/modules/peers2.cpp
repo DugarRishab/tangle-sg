@@ -1,5 +1,5 @@
 // peers2.cpp
-#include "peers2.h"
+#include "../headers/peers2.h"
 #include <thread>
 #include <iostream>
 #include <random>
@@ -15,14 +15,15 @@
 #include <stdexcept>
 #include <cstdlib>
 #include <jsoncpp/json/json.h>
-#include "tangle.h"
-#include "network.h"
+
+#include "../headers/network.h"
+#include "../headers/tangle.h"
 
 using namespace std;
 
 std::vector<Peer> activePeers; // Active WebSocket connections
 
-Peers::Peers(int port, Tangle &tangle) : port_(port), running_(true), tangle(tangle)
+Peers::Peers(int port, Tangle &tangle, Network &net) : port_(port), running_(true), tangle(tangle), net(net)
 {
 
 	// Load HMAC secret
@@ -434,7 +435,7 @@ void Peers::responderLoop()
 						addPeer(p);
 						std::cout << "Handshake successful with peer: " << p.id << "\n";
 
-						connectWebSocket(p);
+						net.connectWebSocket(p);
 						activePeers.push_back(p);
 					}
 				}
@@ -484,7 +485,7 @@ void Peers::responderLoop()
 					{
 						// on success, add to active list
 						addPeer(p);
-						connectWebSocket(p);
+						net.connectWebSocket(p);
 						activePeers.push_back(p);
 						std::cout << "Connected to peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
 					}
@@ -506,27 +507,27 @@ void Peers::responderLoop()
 	}
 }
 
-Peer Peers::connectWebSocket(Peer &peer)
-{
-	auto client = std::make_shared<WsClient>();
-	client->init_asio();
-	websocketpp::lib::error_code ec;
-	auto con = client->get_connection("ws://" + peer.address + ":" + std::to_string(peer.port), ec);
+// Peer Peers::connectWebSocket(Peer &peer)
+// {
+// 	auto client = std::make_shared<WsClient>();
+// 	client->init_asio();
+// 	websocketpp::lib::error_code ec;
+// 	auto con = client->get_connection("ws://" + peer.address + ":" + std::to_string(peer.port), ec);
 
-	if (ec)
-		throw std::runtime_error(ec.message());
+// 	if (ec)
+// 		throw std::runtime_error(ec.message());
 
-	websocketpp::connection_hdl hdl = con->get_handle();
+// 	websocketpp::connection_hdl hdl = con->get_handle();
 
-	setupMessageReceiver(client, tangle); // Set up message handler
+// 	setupMessageReceiver(client, tangle); // Set up message handler
 
-	client->connect(con);
-	std::thread([client]()
-				{ client->run(); })
-		.detach();
+// 	client->connect(con);
+// 	std::thread([client]()
+// 				{ client->run(); })
+// 		.detach();
 
-	peer.client = client;
-	peer.hdl = hdl;
+// 	peer.client = client;
+// 	peer.hdl = hdl;
 
-	return peer;
-}
+// 	return peer;
+// }

@@ -24,17 +24,66 @@
 
 using namespace std;
 
-
 using WsClient = websocketpp::client<websocketpp::config::asio_client>;
 using ConnectionHdl = websocketpp::connection_hdl;
 using MessagePtr = websocketpp::config::asio_client::message_type::ptr;
+using WsServer = websocketpp::server<websocketpp::config::asio>;
 
+enum class ConnectionType // to determine the connection type
+{
+    Client,
+    Server
+};
 
+Network::Network(uint16_t wsPort = 9000, Tangle tangle) : wsPort(wsPort), tangle(tangle)
+{
+    initServer();
+    initClient();
+}
 
+Network::~Network()
+{
+}
 
+void Network::initClient()
+{
+    client = std::make_shared<WsClient>();
+    client->init_asio();
+    client->set_message_handler(
+        [this](websocketpp::connection_hdl hdl, WsClient::message_ptr msg)
+        {
+            handleIncomingMessage(hdl, msg->get_payload(), ConnectionType::Client);
+        });
+    std::thread([this]
+                { client->run(); })
+        .detach();
+}
+
+void Network::initServer()
+{
+    server = std::make_shared<WsServer>();
+    server->init_asio();
+    server->set_reuse_addr(true);
+    server->set_open_handler(
+        [this](websocketpp::connection_hdl hdl)
+        {
+            // new connection opened
+            // TODO: Save the hdl as server_hdl in the peer
+        });
+    server->set_message_handler(
+        [this](websocketpp::connection_hdl hdl, WsServer::message_ptr msg)
+        {
+            handleIncomingMessage(hdl, msg->get_payload(), ConnectionType::Server);
+        });
+    server->listen(ws_port);
+    server->start_accept();
+    std::thread([this]
+                { server->run(); })
+        .detach();
+}
 
 // Computes SHA-256 checksum of the data
-string computeChecksum(const string &data)
+string Network::computeChecksum(const string &data)
 {
     unsigned char hash[SHA256_DIGEST_LENGTH];
     SHA256((unsigned char *)data.c_str(), data.size(), hash);
@@ -48,17 +97,16 @@ string computeChecksum(const string &data)
 }
 
 // Verifies that the received data has a correct checksum
-bool verifyChecksum(const string &data, const string &receivedChecksum)
+bool Network::verifyChecksum(const string &data, const string &receivedChecksum)
 {
     string calculatedChecksum = computeChecksum(data);
     return calculatedChecksum == receivedChecksum;
 }
 
-void printLastTransaction(Tangle &tangle)
+void Network::printLastTransaction()
 {
     Transaction lastTx;
     time_t latestTimestamp = time(nullptr); // Initialize to current time
-
 
     for (const auto &pair : tangle.transactions)
     {
@@ -94,16 +142,16 @@ void printLastTransaction(Tangle &tangle)
     }
 }
 
-void handleTangleUpdate(std::string receivedData, Tangle &tangle)
+void Network::handleTangleUpdate(std::string receivedData)
 {
     if (!receivedData.empty())
     {
         {
-            
+
             tangle.updateFromSerialized(receivedData);
         }
         cout << "[LOG] Tangle update verified and applied." << endl;
-        printLastTransaction(tangle);
+        printLastTransaction();
     }
     else
     {
@@ -111,182 +159,154 @@ void handleTangleUpdate(std::string receivedData, Tangle &tangle)
     }
 }
 
-void setupMessageReceiver(WebSocketPtr client, Tangle &tangle)
+void Network::handleIncomingMessage(ConnectionHdl hdl, std::string &payload, ConnectionType type)
 {
-    client->set_message_handler(
-        [&](ConnectionHdl hdl, MessagePtr msg)
+    size_t pos = payload.find(":");
+    if (pos != string::npos)
+    {
+        string messageType = payload.substr(0, pos);
+        string message = payload.substr(pos + 1);
+        // parse the message assuming it is in JSON format. seperate tangle, checksum, and timestamp
+        Json::Value jsonData;
+        Json::CharReaderBuilder reader;
+        std::istringstream s(message);
+        std::string errs;
+
+        // Extract tangle data
+        string data = jsonData["data"].asString();
+        string checksum = jsonData["checksum"].asString();
+        string timestamp = jsonData["timestamp"].asString();
+
+        if (Json::parseFromStream(reader, s, &jsonData, &errs))
         {
-            // 1) Identify which peer sent it (if you’ve mapped hdl → peerId):
-            // std::string peerId = peerMap[hdl];
-            
-            // 2) Grab payload and optionally its opcode:
-            auto payload = msg->get_payload();
-            auto opcode = msg->get_opcode(); // text or binary
 
-            // 3) Process it:
-            if (opcode == websocketpp::frame::opcode::text)
+            // Verify checksum
+            if (verifyChecksum(data, checksum))
             {
-                // std::cout << "[recv] From peer: " << payload << "\n";
-                // handleTCPClient(payload, tangle);
-
-                //seperate message type from payload. Identified by 1st colon
-                size_t pos = payload.find(":");
-                if (pos != string::npos)
-                {
-                    string messageType = payload.substr(0, pos);
-                    string message = payload.substr(pos + 1);
-                    // parse the message assuming it is in JSON format. seperate tangle, checksum, and timestamp
-                    Json::Value jsonData;
-                    Json::CharReaderBuilder reader;
-                    std::istringstream s(message);
-                    std::string errs;
-
-                     // Extract tangle data
-                    string tangleData = jsonData["tangle"].asString();
-                    string checksum = jsonData["checksum"].asString();
-                    string timestamp = jsonData["timestamp"].asString();
-
-
-                    if (Json::parseFromStream(reader, s, &jsonData, &errs))
-                    {
-                       
-                        // Verify checksum
-                        if (verifyChecksum(tangleData, checksum))
-                        {
-                            cout << "[LOG] Received valid Tangle update from peer." << endl;
-                            // handleTCPClient(tangleData + " " + checksum, tangle);
-                        }
-                        else
-                        {
-                            cerr << "[ERROR] Checksum verification failed for received Tangle data." << endl;
-                            return;
-                        }
-                    }
-                    else
-                    {
-                        cerr << "[ERROR] Failed to parse JSON message: " << errs << endl;
-                        return; 
-                    }
-
-                    if (messageType == "NEWTX")
-                    {
-                        cout << "[LOG] Received new transaction from peer: " << message << endl;
-                        // Handle new transaction
-                        Transaction newTx = Tangle::deserializeTransaction(tangleData);
-                        // TODO: verify checksum of tx
-
-                        // TODO: check sign status of tx
-                        if(newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
-                        {
-                            cerr << "[ERROR] Transaction is not signed. Cannot add to Tangle." << endl;
-                            return;
-                        }
-                        // single signed transaction
-                        else if(!newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
-                        {
-                            cout << "[LOG] Transaction is only single signed. PoW not performed" << endl;
-                            
-                            // TODO: if the transaction is only signed by sender,
-
-                            string txSearialized = Tangle::serializeTransactionData(newTx);
-                            string sig_b64 = newTx.metadata.signature1;
-
-                            if(verifyTransaction(txSearialized, sig_b64, newTx.data.sender)) // Verify signature 1 is sender's signature
-                            {
-                                cout << "[LOG] Transaction is signed by sender. Adding to Tangle." << endl;
-                                // If the transaction is only signed by sender, we can add it to the Tangle
-                                // but we need to perform PoW later
-                            }
-                            else
-                            {
-                                cerr << "[ERROR] Transaction signature 1 verification failed for sender." << endl;
-                                return;
-                            }
-                            // check if the receiver is same as the host node.
-                            const std::string uid = getenv("UID");
-                            // If yes, that means this node (the host node) is the receiver and must doubly sign the transaction
-                            if(newTx.data.receiver == uid) // If receiver is the host node
-                            {
-                                // verify tx data against own meter data -> not possible here in docknet
-                                cout << "[LOG] Transaction is for this node. Double signing it." << endl;
-                                // Sign the transaction with the receiver's signature
-                                newTx.metadata.signature2 = signTransaction(txSearialized);
-                                newTx.metadata.lastUpdated = time(nullptr);
-                                newTx.metadata.cumulative_weight = 0; // Initialize cumulative weight
-                            }
-                            else
-                            {
-                                cout << "[LOG] Transaction is not for this node. Not signing." << endl;
-                            }
-                            
-
-                            tangle.addTransaction(newTx);
-                        }
-                        // double signed transaction
-                        else if(!newTx.metadata.signature1.empty() && !newTx.metadata.signature2.empty())
-                        {
-                            // TODO: verify each signature
-                            string txSearialized = Tangle::serializeTransactionData(newTx);
-                            string sig1_b64 = newTx.metadata.signature1;
-                            string sig2_b64 = newTx.metadata.signature2;
-
-                            if(verifyTransaction(txSearialized, sig1_b64, newTx.data.sender) && 
-                               verifyTransaction(txSearialized, sig2_b64, newTx.data.receiver)) // Verify both signatures
-                            {
-                                cout << "[LOG] Transaction is double signed by sender and receiver. Adding to Tangle." << endl;
-                            }
-                            else
-                            {
-                                cerr << "[ERROR] Transaction signature verification failed." << endl;
-                                return;
-                            }
-                            // perform PoW
-                            
-                            tangle.addTransaction(newTx);
-                            performPoW(newTx.data.transaction_id, 2);
-                            tangle.updateCumulativeWeight(newTx.data.transaction_id); // Increase cumulative weight for new transaction
-                        }
-
-                        cout << "[LOG] New transaction added to Tangle: " << newTx.data.transaction_id << endl;
-                        // TODO: broadcast this transaction to all peers
-                        broadcastTransaction(newTx);
-
-                        
-                    }
-                    if (messageType == "SYNC_REQ")
-                    {
-                        cout << "[LOG] Received SYNC_REQ from peer. Sending Tangle data." << endl;
-                        // Respond with Tangle data
-                        sendTangle(tangle, client, hdl);
-                    }
-                    if(messageType == "SYNC_ACK")
-                    {
-                        cout << "[LOG] Received SYNC_ACK from peer. Tangle data synchronized." << endl;
-                        // TODO: accept tangle data from peer
-                        handleTangleUpdate(tangleData + " " + checksum, tangle);
-                    }
-                }
-                else
-                {
-                    cerr << "[ERROR] Invalid message format received: " << payload << endl;
-                }
-
+                cout << "[LOG] Received valid Tangle update from peer." << endl;
+                // handleTCPClient(data + " " + checksum, tangle);
             }
             else
             {
-                std::cout << "[recv] Received non‑text frame\n";
+                cerr << "[ERROR] Checksum verification failed for received Tangle data." << endl;
+                return;
             }
-        });
+        }
+        else
+        {
+            cerr << "[ERROR] Failed to parse JSON message: " << errs << endl;
+            return;
+        }
+
+        if (messageType == "NEWTX")
+        {
+            cout << "[LOG] Received new transaction from peer: " << message << endl;
+            // Handle new transaction
+            Transaction newTx = Tangle::deserializeTransaction(data);
+            // TODO: verify checksum of tx
+
+            // TODO: check sign status of tx
+            if (newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
+            {
+                cerr << "[ERROR] Transaction is not signed. Cannot add to Tangle." << endl;
+                return;
+            }
+            // single signed transaction
+            else if (!newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
+            {
+                cout << "[LOG] Transaction is only single signed. PoW not performed" << endl;
+
+                // TODO: if the transaction is only signed by sender,
+
+                string txSearialized = Tangle::serializeTransactionData(newTx);
+                string sig_b64 = newTx.metadata.signature1;
+
+                if (verifyTransaction(txSearialized, sig_b64, newTx.data.sender)) // Verify signature 1 is sender's signature
+                {
+                    cout << "[LOG] Transaction is signed by sender. Adding to Tangle." << endl;
+                    // If the transaction is only signed by sender, we can add it to the Tangle
+                    // but we need to perform PoW later
+                }
+                else
+                {
+                    cerr << "[ERROR] Transaction signature 1 verification failed for sender." << endl;
+                    return;
+                }
+                // check if the receiver is same as the host node.
+                const std::string uid = getenv("UID");
+                // If yes, that means this node (the host node) is the receiver and must doubly sign the transaction
+                if (newTx.data.receiver == uid) // If receiver is the host node
+                {
+                    // verify tx data against own meter data -> not possible here in docknet
+                    cout << "[LOG] Transaction is for this node. Double signing it." << endl;
+                    // Sign the transaction with the receiver's signature
+                    newTx.metadata.signature2 = signTransaction(txSearialized);
+                    newTx.metadata.lastUpdated = time(nullptr);
+                    newTx.metadata.cumulative_weight = 0; // Initialize cumulative weight
+                }
+                else
+                {
+                    cout << "[LOG] Transaction is not for this node. Not signing." << endl;
+                }
+
+                tangle.addTransaction(newTx);
+            }
+            // double signed transaction
+            else if (!newTx.metadata.signature1.empty() && !newTx.metadata.signature2.empty())
+            {
+                // TODO: verify each signature
+                string txSearialized = Tangle::serializeTransactionData(newTx);
+                string sig1_b64 = newTx.metadata.signature1;
+                string sig2_b64 = newTx.metadata.signature2;
+
+                if (verifyTransaction(txSearialized, sig1_b64, newTx.data.sender) &&
+                    verifyTransaction(txSearialized, sig2_b64, newTx.data.receiver)) // Verify both signatures
+                {
+                    cout << "[LOG] Transaction is double signed by sender and receiver. Adding to Tangle." << endl;
+                }
+                else
+                {
+                    cerr << "[ERROR] Transaction signature verification failed." << endl;
+                    return;
+                }
+                // perform PoW
+
+                tangle.addTransaction(newTx);
+                performPoW(newTx.data.transaction_id, 2);
+                tangle.updateCumulativeWeight(newTx.data.transaction_id); // Increase cumulative weight for new transaction
+            }
+
+            cout << "[LOG] New transaction added to Tangle: " << newTx.data.transaction_id << endl;
+            // TODO: broadcast this transaction to all peers
+            broadcastTransaction(newTx);
+        }
+        if (messageType == "SYNC_REQ")
+        {
+            cout << "[LOG] Received SYNC_REQ from peer. Sending Tangle data." << endl;
+            // Respond with Tangle data
+            sendTangle(hdl, ConnectionType::Server);
+        }
+        if (messageType == "SYNC_ACK")
+        {
+            cout << "[LOG] Received SYNC_ACK from peer. Tangle data synchronized." << endl;
+            // TODO: accept tangle data from peer
+            handleTangleUpdate(data);
+        }
+    }
+    else
+    {
+        cerr << "[ERROR] Invalid message format received: " << payload << endl;
+    }
 }
 
-void broadcastTransaction(const Transaction &Tx)
+void Network::broadcastTransaction(const Transaction &Tx)
 {
     // Serialize the transaction
     string message = Tangle::serializeTransaction(Tx);
 
     string checksum = computeChecksum(message);
 
-    // create a JSON object using JSON-CPP  
+    // create a JSON object using JSON-CPP
     Json::Value jsonData;
     jsonData["data"] = message;
     jsonData["checksum"] = checksum;
@@ -298,13 +318,14 @@ void broadcastTransaction(const Transaction &Tx)
     broadcastMessage(jsonString, "NEWTX");
     cout << "[LOG] Broadcasted new transaction to peers." << endl;
 }
-void sendTangle(Tangle &tangle, WebSocketPtr client, const ConnectionHdl &hdl)
+
+void Network::sendTangle(const ConnectionHdl &hdl, ConnectionType connectionType)
 {
     // Serialize the Tangle
     string message = tangle.serialize();
     string checksum = computeChecksum(message);
 
-    // create a JSON object using JSON-CPP 
+    // create a JSON object using JSON-CPP
     Json::Value jsonData;
     jsonData["data"] = message;
     jsonData["checksum"] = checksum;
@@ -313,26 +334,56 @@ void sendTangle(Tangle &tangle, WebSocketPtr client, const ConnectionHdl &hdl)
     Json::StreamWriterBuilder writer;
     string jsonString = Json::writeString(writer, jsonData);
 
-    sendMessage(jsonString, "SYNC_ACK", client, hdl);
+    sendMessage(jsonString, "SYNC_ACK", hdl, connectionType);
+
     cout << "[LOG][SYNC_ACK] Sent Tangle to peer ." << endl;
 }
+// TODO: sendSyncRequest() function
 
-// Message Types - NEWTX, SYNC, SYNC_ACK. 
+// Connect to a peer via WebSocket (client side)
+void Network::connectWebSocket(Peer &peer)
+{
+    websocketpp::lib::error_code ec;
+    auto uri = "ws://" + peer.address + ":" + std::to_string(wsPort);
+    auto con = client->get_connection(uri, ec);
+    if (ec){
+        throw std::runtime_error(ec.message());
+    }
+        
+    // Save outbound handle
+    peer.client_hdl = con->get_handle();
+
+    client->connect(con);
+}
 
 // General function to send a message to all active peers. Input - Message and Message Type
-void broadcastMessage(const string &message, const string &messageType)
+void Network::broadcastMessage(const string &message, const string &messageType)
 {
     for (auto &peer : activePeers)
     {
         // Construct the message with type prefix
         string fullMessage = messageType + ": " + message;
-        peer.client->send(peer.hdl, fullMessage, websocketpp::frame::opcode::text);
+
+        if (!peer.client_hdl.lock().expired())
+        {
+            sendMessage(message, messageType, peer.client_hdl, ConnectionType::Client);
+        }
+        // send via server if inbound connection exists
+        else if (!peer.server_hdl.lock().expired())
+        {
+            sendMessage(message, messageType, peer.server_hdl, ConnectionType::Server);
+        }
     }
 }
-void sendMessage(const string &message, const string &messageType, WebSocketPtr client, const ConnectionHdl &hdl)
+void Network::sendMessage(const string &message, const string &messageType, const ConnectionHdl &hdl, const ConnectionType connectionType)
 {
     // Construct the message with type prefix
     string fullMessage = messageType + ": " + message;
-    client->send(hdl, fullMessage, websocketpp::frame::opcode::text);
+
+    if (connectionType == ConnectionType::Client)
+        client->send(hdl, fullMessage, websocketpp::frame::opcode::text);
+    else if (connectionType == ConnectionType::Server)
+        server->send(hdl, fullMessage, websocketpp::frame::opcode::text);
+
     cout << "[LOG] Sent message to peer: " << fullMessage << endl;
 }
