@@ -44,6 +44,7 @@ struct Peer
 {
 	std::string id;		 // UID of the peer
 	std::string address; // IP address
+	int port;
 	websocketpp::connection_hdl client_hdl; // WebSocket connection handle
 	websocketpp::connection_hdl server_hdl;
 	uint64_t nonce;
