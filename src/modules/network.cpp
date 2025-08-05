@@ -352,7 +352,7 @@ void Network::connectWebSocket(Peer &peer)
 
     client->connect(con);
 
-    std::cout << "Websocket connected to peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
+    std::cout << "Websocket connected to peer: " << peer.id << " at " << peer.address << ":" << peer.port << "\n";
 }
 
 // General function to send a message to all active peers. Input - Message and Message Type
