@@ -31,13 +31,13 @@ public:
 	Network(uint16_t wsPort, Tangle &tangle);
 	~Network();
 
-	static void broadcastTransaction(const Transaction &Tx);
-	static void sendTangle(const ConnectionHdl &hdl, ConnectionType connectionType);
-	static void handleTangleUpdate(std::string receivedData);
+	void broadcastTransaction(const Transaction &Tx);
+	void sendTangle(const ConnectionHdl &hdl, ConnectionType connectionType);
+	void handleTangleUpdate(std::string receivedData);
 	void handleIncomingMessage(ConnectionHdl hdl, const std::string &payload, ConnectionType type);
 	void broadcastMessage(const std::string &message, const std::string &messageType);
 	void sendMessage(const string &message, const string &messageType, const ConnectionHdl &hdl, const ConnectionType connectionType);
-	static void printLastTransaction();
+	void printLastTransaction();
 	static bool verifyChecksum(const std::string &data, const std::string &receivedChecksum);
 	static std::string computeChecksum(const std::string &data);
 	void connectWebSocket(Peer &peer);

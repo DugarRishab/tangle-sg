@@ -156,7 +156,7 @@ void Network::handleTangleUpdate(std::string receivedData)
     }
 }
 
-void Network::handleIncomingMessage(ConnectionHdl hdl, const std::string &payload, ConnectionType type)
+void Network::handleIncomingMessage(ConnectionHdl hdl, const std::string &payload, ConnectionType connectionType)
 {
     size_t pos = payload.find(":");
     if (pos != string::npos)
@@ -281,7 +281,7 @@ void Network::handleIncomingMessage(ConnectionHdl hdl, const std::string &payloa
         {
             cout << "[LOG] Received SYNC_REQ from peer. Sending Tangle data." << endl;
             // Respond with Tangle data
-            sendTangle(hdl, ConnectionType::Server);
+            sendTangle(hdl, connectionType);
         }
         if (messageType == "SYNC_ACK")
         {
@@ -361,12 +361,12 @@ void Network::broadcastMessage(const string &message, const string &messageType)
         // Construct the message with type prefix
         string fullMessage = messageType + ": " + message;
 
-        if (!peer.client_hdl.lock().expired())
+        if (!peer.client_hdl.expired())
         {
             sendMessage(message, messageType, peer.client_hdl, ConnectionType::Client);
         }
         // send via server if inbound connection exists
-        else if (!peer.server_hdl.lock().expired())
+        else if (!peer.server_hdl.expired())
         {
             sendMessage(message, messageType, peer.server_hdl, ConnectionType::Server);
         }
