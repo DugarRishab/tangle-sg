@@ -28,7 +28,7 @@ class Network
 {
 
 public:
-	Network(uint16_t wsPort, Tangle tangle);
+	Network(uint16_t wsPort, Tangle &tangle);
 	~Network();
 
 	static void broadcastTransaction(const Transaction &Tx);
