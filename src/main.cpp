@@ -216,16 +216,16 @@ int main()
         std::cout << "Exported PK_b64, SK_b64, and UID to environment.\n";
     }
 
-    try
-    {
-        std::string secret = loadOrCreateHMACSecret(HMAC_SECRET_FILE);
-        // Now getenv("HMAC_SECRET") will return this hex string.
-    }
-    catch (const std::exception &ex)
-    {
-        std::cerr << "[FATAL] " << ex.what() << "\n";
-        return 1;
-    }
+    // try
+    // {
+    //     std::string secret = loadOrCreateHMACSecret(HMAC_SECRET_FILE);
+    //     // Now getenv("HMAC_SECRET") will return this hex string.
+    // }
+    // catch (const std::exception &ex)
+    // {
+    //     std::cerr << "[FATAL] " << ex.what() << "\n";
+    //     return 1;
+    // }
 
     // TODO FOR DOCKNET: using a standard Ed25519 tool
     // ed25519 - keygen

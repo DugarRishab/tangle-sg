@@ -23,6 +23,9 @@ echo "[INFO] Skipping RPi.GPIO and spidev in Docker container."
 
 # apt install RPi.GPIO spidev 
 
+echo 'export HMAC_SECRET = "dbicbidbicdnsonxpwqhudighsanxwqoueiobjsamopdjwqioh"' >> ~/.bashrc
+source ~/.bashrc
+
 # 5. Build system
 echo "[INFO] Building the C++ system..."
 make clean && make

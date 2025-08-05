@@ -208,6 +208,9 @@ bool Peers::verifyHMAC(const Json::Value &msg)
 
 	std::ostringstream data;
 	data << UID_A << peerId << NONCE_A << nonceB;
+	
+	
+
 	return computeHMAC(data.str()) == msg["hmac"].asString();
 }
 
