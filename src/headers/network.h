@@ -42,6 +42,7 @@ public:
 	static std::string computeChecksum(const std::string &data);
 	void connectWebSocket(Peer &peer);
 	void scheduleReconnect(Peer &peer);
+	void startPeerMonitor(std::chrono::milliseconds interval = std::chrono::seconds(30));
 
 private:
 	uint16_t ws_port;

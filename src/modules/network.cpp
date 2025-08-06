@@ -41,6 +41,34 @@ Network::~Network()
 {
 }
 
+void Network::startPeerMonitor(std::chrono::milliseconds interval)
+{
+    monitorThread = std::thread(
+        [this, interval]()
+        {
+            while (true)
+            {
+                std::cout << "[MONITOR] Checking active peers...\n";
+                
+                auto now = std::chrono::steady_clock::now();
+
+                for (auto &[uri, peer] : activePeers)
+                {
+                    // if not already open or in the process of connecting
+                    if (peer.state != ConnectionState::OPEN &&
+                        peer.state != ConnectionState::CONNECTING)
+                    {
+                        std::cout << "[MONITOR] Attempting reconnect to " << uri << "\n";
+                        connectWebSocket(peer);
+                        
+                    }
+                }
+
+                std::this_thread::sleep_until(now + interval);
+            }
+        });
+}
+
 void Network::initClient()
 {
     client = std::make_shared<WsClient>();
@@ -49,8 +77,6 @@ void Network::initClient()
     client->set_open_handler(
         [this](ConnectionHdl hdl)
         {
-            
-
             auto con = client->get_con_from_hdl(hdl);
             auto &p = activePeers[con->get_uri()->str()];
             p.client_hdl = hdl;
@@ -86,6 +112,7 @@ void Network::initClient()
         {
             auto con = client->get_con_from_hdl(h);
             auto &p = activePeers[con->get_uri()->str()];
+            std::cout << "[ERROR] WebSocket connection failed with peer " << p.id << " at " << p.address << " : " << p.port << "\n";
             p.state = ConnectionState::FAILED;
             scheduleReconnect(p);
         });
@@ -96,6 +123,7 @@ void Network::initClient()
         {
             auto con = client->get_con_from_hdl(h);
             auto &p = activePeers[con->get_uri()->str()];
+            std::cout << "[LOG] WebSocket connection closed with peer " << p.id << " at " << p.address << " : " << p.port << "\n";
             p.state = ConnectionState::CLOSED;
             scheduleReconnect(p);
         });
@@ -113,6 +141,10 @@ void Network::initServer()
     server->set_open_handler(
         [this](ConnectionHdl hdl)
         {
+            auto con = server->get_con_from_hdl(hdl);
+            auto &p = activePeers[con->get_uri()->str()];
+
+            std::cout << "[LOG] New WebSocket connection from peer" << p.id << " at " << p.address << " : " << p.port << "\n";
             // new connection opened
             // TODO: Save the hdl as server_hdl in the peer
         });
@@ -123,7 +155,7 @@ void Network::initServer()
             auto &p = activePeers[con->get_uri()->str()];
 
             std::cout << "[LOG] Received message from peer " << p.id << " at " << p.address << " : " << p.port << "\n";
-            
+
             handleIncomingMessage(p, msg->get_payload());
         });
     server->listen(ws_port);

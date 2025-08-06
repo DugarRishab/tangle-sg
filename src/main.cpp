@@ -280,6 +280,8 @@ int main()
         }
     };
 
+    net.startPeerMonitor(std::chrono::seconds(30)); // Start peer monitor thread
+
     // THREAD 2: Simulation loop
     auto simWrapper = [&]()
     {
