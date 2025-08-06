@@ -49,17 +49,23 @@ void Network::initClient()
     client->set_open_handler(
         [this](ConnectionHdl hdl)
         {
+            
+
             auto con = client->get_con_from_hdl(hdl);
             auto &p = activePeers[con->get_uri()->str()];
             p.client_hdl = hdl;
             p.state = ConnectionState::OPEN;
             p.retryCount = 0;
 
+            std::cout << "[LOG] WebSocket connection established with peer "
+                      << p.id << " at " << p.address << " : " << p.port << "\n";
+
             // flush queued messages
             while (!p.outgoingQueue.empty())
             {
                 auto &qm = p.outgoingQueue.front();
                 client->send(hdl, qm.payload, qm.opcode);
+                std::cout << "[LOG] Sent queued message to peer " << p.id << ": " << qm.payload << "\n";
                 p.outgoingQueue.pop_front();
             }
         });
@@ -69,6 +75,8 @@ void Network::initClient()
         {
             auto con = client->get_con_from_hdl(hdl);
             auto &p = activePeers[con->get_uri()->str()];
+
+            std::cout << "[LOG] Received message from peer " << p.id << " at " << p.address << " : " << p.port << "\n";
             handleIncomingMessage(p, msg->get_payload());
         });
 
@@ -113,6 +121,9 @@ void Network::initServer()
         {
             auto con = client->get_con_from_hdl(hdl);
             auto &p = activePeers[con->get_uri()->str()];
+
+            std::cout << "[LOG] Received message from peer " << p.id << " at " << p.address << " : " << p.port << "\n";
+            
             handleIncomingMessage(p, msg->get_payload());
         });
     server->listen(ws_port);
