@@ -51,7 +51,7 @@ void Network::initClient()
         {
             auto con = client->get_con_from_hdl(hdl);
             auto &p = activePeers[con->get_uri()->str()];
-            p.hdl = hdl;
+            p.client_hdl = hdl;
             p.state = ConnectionState::OPEN;
             p.retryCount = 0;
 
@@ -60,7 +60,7 @@ void Network::initClient()
             {
                 auto &qm = p.outgoingQueue.front();
                 client->send(hdl, qm.payload, qm.opcode);
-                p.queue.pop_front();
+                p.outgoingQueue.pop_front();
             }
         });
 
@@ -74,7 +74,7 @@ void Network::initClient()
 
     // on fail (handshake/transport error)
     client->set_fail_handler(
-        [this](connection_hdl h)
+        [this](ConnectionHdl h)
         {
             auto con = client->get_con_from_hdl(h);
             auto &p = activePeers[con->get_uri()->str()];
@@ -84,7 +84,7 @@ void Network::initClient()
 
     // on close
     client->set_close_handler(
-        [this](connection_hdl h)
+        [this](ConnectionHdl h)
         {
             auto con = client->get_con_from_hdl(h);
             auto &p = activePeers[con->get_uri()->str()];
@@ -448,7 +448,7 @@ void Network::sendMessage(const string &message, const string &messageType, Peer
 {
     // Construct the message with type prefix
     string fullMessage = messageType + ": " + message;
-    websocketpp::ConnectionHdl hdl = peer.client_hdl;
+    ConnectionHdl hdl = peer.client_hdl;
 
     try
     {
