@@ -21,6 +21,8 @@
 
 using namespace std;
 
+std::unordered_map<std::string, Peer> activePeers;
+
 Peers::Peers(int port, Tangle &tangle, Network &net) : port_(port), running_(true), tangle(tangle), net(net), ws_port(9000)
 {
 
