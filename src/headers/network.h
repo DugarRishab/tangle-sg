@@ -34,7 +34,7 @@ public:
 	void broadcastTransaction(const Transaction &Tx);
 	void sendTangle(Peer& peer);
 	void handleTangleUpdate(std::string receivedData);
-	void handleIncomingMessage(Peeer& peer, const std::string &payload);
+	void handleIncomingMessage(Peer& peer, const std::string &payload);
 	void broadcastMessage(const std::string &message, const std::string &messageType);
 	void sendMessage(const string &message, const string &messageType, Peer& peer);
 	void printLastTransaction();
