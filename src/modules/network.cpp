@@ -49,6 +49,7 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
             while (true)
             {
                 std::cout << "[MONITOR] Checking active peers...\n";
+                std::cout << "[MONITOR] Active peers count: " << activePeers.size() << "\n";
                 
                 auto now = std::chrono::steady_clock::now();
 
@@ -401,7 +402,7 @@ void Network::broadcastTransaction(const Transaction &Tx)
     // Serialize the transaction
     string message = Tangle::serializeTransaction(Tx);
     std::cout << "[LOG] Broadcasting new transaction: " << Tx.data.transaction_id << endl;
-    std::cout << "[LOG] Transaction data: " << message << endl;
+    // std::cout << "[LOG] Transaction data: " << message << endl;
 
     string checksum = computeChecksum(message);
 
@@ -413,7 +414,7 @@ void Network::broadcastTransaction(const Transaction &Tx)
 
     Json::StreamWriterBuilder writer;
     string jsonString = Json::writeString(writer, jsonData);
-    cout << "[LOG] Transaction JSON: " << jsonString << endl;
+    // cout << "[LOG] Transaction JSON: " << jsonString << endl;
     broadcastMessage(jsonString, "NEWTX");
     cout << "[LOG][NEWTX] Broadcasted new transaction to peers." << endl;
 }
