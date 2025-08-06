@@ -47,7 +47,7 @@ void Network::initClient()
     client->init_asio();
 
     client->set_open_handler(
-        [this](connection_hdl hdl)
+        [this](ConnectionHdl hdl)
         {
             auto con = client->get_con_from_hdl(hdl);
             auto &p = activePeers[con->get_uri()->str()];
@@ -65,7 +65,7 @@ void Network::initClient()
         });
 
     client->set_message_handler(
-        [this](websocketpp::connection_hdl hdl, WsClient::message_ptr msg)
+        [this](ConnectionHdl hdl, WsClient::message_ptr msg)
         {
             auto con = client->get_con_from_hdl(hdl);
             auto &p = activePeers[con->get_uri()->str()];
@@ -103,13 +103,13 @@ void Network::initServer()
     server->init_asio();
     server->set_reuse_addr(true);
     server->set_open_handler(
-        [this](websocketpp::connection_hdl hdl)
+        [this](ConnectionHdl hdl)
         {
             // new connection opened
             // TODO: Save the hdl as server_hdl in the peer
         });
     server->set_message_handler(
-        [this](websocketpp::connection_hdl hdl, WsServer::message_ptr msg)
+        [this](ConnectionHdl hdl, WsServer::message_ptr msg)
         {
             auto con = client->get_con_from_hdl(hdl);
             auto &p = activePeers[con->get_uri()->str()];
@@ -409,7 +409,7 @@ void Network::connectWebSocket(Peer &peer)
     auto con = client->get_connection(uri, ec);
     if (ec)
     {
-        p.state = ConnectionState::FAILED;
+        peer.state = ConnectionState::FAILED;
         std::cerr << "[ERROR] Websocket connection NOT established with peer "
                   << peer.id << " at " << peer.address << " : " << peer.port << ". Reason: " << ec.message() << '\n';
         throw std::runtime_error(ec.message());
@@ -420,13 +420,13 @@ void Network::connectWebSocket(Peer &peer)
 
     try
     {
-        p.state = ConnectionState::CONNECTING;
+        peer.state = ConnectionState::CONNECTING;
         client->connect(con);
         std::cout << "Websocket connected to peer: " << peer.id << " at " << peer.address << ":" << peer.port << "\n";
     }
     catch (const std::exception &e)
     {
-        p.state = ConnectionState::FAILED;
+        peer.state = ConnectionState::FAILED;
         std::cerr << "[ERROR] Websocket connection NOT established with peer"
                   << peer.id << " at " << peer.address << " : " << peer.port << ". Reason: " << e.what() << '\n';
     }
@@ -435,12 +435,12 @@ void Network::connectWebSocket(Peer &peer)
 // General function to send a message to all active peers. Input - Message and Message Type
 void Network::broadcastMessage(const string &message, const string &messageType)
 {
-    for (auto &peer : activePeers)
+    for (auto &item : activePeers)
     {
         // Construct the message with type prefix
         string fullMessage = messageType + ": " + message;
 
-        sendMessage(message, messageType, peer);
+        sendMessage(message, messageType, item.second);
     }
 }
 
@@ -448,7 +448,7 @@ void Network::sendMessage(const string &message, const string &messageType, Peer
 {
     // Construct the message with type prefix
     string fullMessage = messageType + ": " + message;
-    websocketpp::connection_hdl hdl = peer.client_hdl;
+    websocketpp::ConnectionHdl hdl = peer.client_hdl;
 
     try
     {
