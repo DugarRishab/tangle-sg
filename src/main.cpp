@@ -59,7 +59,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
             continue; // skip this iteration until we have at least one
         }
 
-        vector<string> parents = selectTips(tangle);
+        vector<string> parents = selectTips(tangle, 2);
 
         // receiver is selected randomly from the list of active peers
         string receiver = peers.getPeerList()[rand() % peers.getPeerList().size()].id;                                                                                                                                    
