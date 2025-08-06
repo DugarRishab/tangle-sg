@@ -21,8 +21,6 @@
 
 using namespace std;
 
-std::vector<Peer> activePeers; // Active WebSocket connections
-
 Peers::Peers(int port, Tangle &tangle, Network &net) : port_(port), running_(true), tangle(tangle), net(net), ws_port(9000)
 {
 
