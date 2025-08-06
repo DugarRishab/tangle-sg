@@ -300,6 +300,8 @@ void Network::broadcastTransaction(const Transaction &Tx)
 {
     // Serialize the transaction
     string message = Tangle::serializeTransaction(Tx);
+    std::cout << "[LOG] Broadcasting new transaction: " << Tx.data.transaction_id << endl;
+    std::cout << "[LOG] Transaction data: " << message << endl;
 
     string checksum = computeChecksum(message);
 
@@ -311,9 +313,9 @@ void Network::broadcastTransaction(const Transaction &Tx)
 
     Json::StreamWriterBuilder writer;
     string jsonString = Json::writeString(writer, jsonData);
-
+    cout << "[LOG] Transaction JSON: " << jsonString << endl;
     broadcastMessage(jsonString, "NEWTX");
-    cout << "[LOG] Broadcasted new transaction to peers." << endl;
+    cout << "[LOG][NEWTX] Broadcasted new transaction to peers." << endl;
 }
 
 void Network::sendTangle(const ConnectionHdl &hdl, ConnectionType connectionType)
@@ -385,12 +387,12 @@ void Network::sendMessage(const string &message, const string &messageType, cons
             client->send(hdl, fullMessage, websocketpp::frame::opcode::text);
         else if (connectionType == ConnectionType::Server)
             server->send(hdl, fullMessage, websocketpp::frame::opcode::text);
+
+        cout << "[LOG] Sent message to peer: " << fullMessage << endl;
     }
     catch(const std::exception& e)
     {
         std::cerr << "[ERROR][SEND MESSAGE]" << e.what() << '\n';
     }
     
-
-    cout << "[LOG] Sent message to peer: " << fullMessage << endl;
 }
