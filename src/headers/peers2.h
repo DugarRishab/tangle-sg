@@ -36,7 +36,18 @@ class Network; // forward declaration of class to prevent circular dependency wi
 // Represents a generic message to send to a peer
 struct Message
 {
-	std::string data;
+	std::string payload;
+	websocketpp::frame::opcode::value opcode;
+};
+
+enum class ConnectionState
+{
+	DISCONNECTED,
+	CONNECTING,
+	OPEN,
+	CLOSING,
+	CLOSED,
+	FAILED
 };
 
 // Represents a peer in the network
@@ -45,12 +56,18 @@ struct Peer
 	std::string id;		 // UID of the peer
 	std::string address; // IP address
 	int port;
+	std::string uri;
 	websocketpp::connection_hdl client_hdl; // WebSocket connection handle
 	websocketpp::connection_hdl server_hdl;
 	uint64_t nonce;
+	ConnectionState state = ConnectionState::DISCONNECTED;
+	std::deque<Message> outgoingQueue;
+	int retryCount = 0;
+	std::chrono::steady_clock::time_point nextRetry;
 };
 
-extern std::vector<Peer> activePeers; // Global store for active WebSocket connections
+// TODO: Use a set for unique peers only
+extern std::unordered_map<std::string, Peer> activePeers; // Global store for active WebSocket connections
 
 // Manages peers, discovery, HMAC-based handshake, and outgoing queue
 class Peers
@@ -67,7 +84,6 @@ public:
 
 private:
 	std::vector<Peer> peers_;
-	std::queue<Message> outgoingQueue_;
 
 	mutable std::mutex queueMutex_, peersMutex_;
 
@@ -76,6 +92,8 @@ private:
 	int sock;
 	int port_;
 	std::string secretK_; // HMAC secret
+
+	int ws_port;
 
 	bool running_;
 	uint64_t NONCE_A; // Nonce for handshake

@@ -32,15 +32,16 @@ public:
 	~Network();
 
 	void broadcastTransaction(const Transaction &Tx);
-	void sendTangle(const ConnectionHdl &hdl, ConnectionType connectionType);
+	void sendTangle(Peer& peer);
 	void handleTangleUpdate(std::string receivedData);
-	void handleIncomingMessage(ConnectionHdl hdl, const std::string &payload, ConnectionType type);
+	void handleIncomingMessage(Peeer& peer, const std::string &payload);
 	void broadcastMessage(const std::string &message, const std::string &messageType);
-	void sendMessage(const string &message, const string &messageType, const ConnectionHdl &hdl, const ConnectionType connectionType);
+	void sendMessage(const string &message, const string &messageType, Peer& peer);
 	void printLastTransaction();
 	static bool verifyChecksum(const std::string &data, const std::string &receivedChecksum);
 	static std::string computeChecksum(const std::string &data);
 	void connectWebSocket(Peer &peer);
+	void scheduleReconnect(Peer &peer);
 
 private:
 	uint16_t ws_port;

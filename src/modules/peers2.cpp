@@ -23,7 +23,7 @@ using namespace std;
 
 std::vector<Peer> activePeers; // Active WebSocket connections
 
-Peers::Peers(int port, Tangle &tangle, Network &net) : port_(port), running_(true), tangle(tangle), net(net)
+Peers::Peers(int port, Tangle &tangle, Network &net) : port_(port), running_(true), tangle(tangle), net(net), ws_port(9000)
 {
 
 	// Load HMAC secret
@@ -436,7 +436,8 @@ void Peers::responderLoop()
 						std::cout << "Handshake successful with peer: " << p.id << "\n";
 
 						net.connectWebSocket(p);
-						activePeers.push_back(p);
+						auto uri = "ws://" + p.address + ":" + std::to_string(ws_port);
+						activePeers.emplace(uri, p);
 					}
 				}
 				else if (type == "HS_RESPONSE")
@@ -486,7 +487,8 @@ void Peers::responderLoop()
 						// on success, add to active list
 						addPeer(p);
 						net.connectWebSocket(p);
-						activePeers.push_back(p);
+						auto uri = "ws://" + p.address + ":" + std::to_string(ws_port);
+						activePeers.emplace(uri, p);
 						std::cout << "Peer added: " << p.id << " at " << p.address << ":" << p.port << "\n";
 						std::cout << "Total connected Peers: " << activePeers.size() + 1 << "\n";
 					}

@@ -31,7 +31,6 @@ using ConnectionHdl = websocketpp::connection_hdl;
 using MessagePtr = websocketpp::config::asio_client::message_type::ptr;
 using WsServer = websocketpp::server<websocketpp::config::asio>;
 
-
 Network::Network(uint16_t ws_port, Tangle &tangle) : ws_port(ws_port), tangle(tangle)
 {
     initServer();
@@ -46,11 +45,53 @@ void Network::initClient()
 {
     client = std::make_shared<WsClient>();
     client->init_asio();
+
+    client->set_open_handler(
+        [this](connection_hdl hdl)
+        {
+            auto con = client->get_con_from_hdl(hdl);
+            auto &p = activePeers[con->get_uri()->str()];
+            p.hdl = hdl;
+            p.state = ConnectionState::OPEN;
+            p.retryCount = 0;
+
+            // flush queued messages
+            while (!p.outgoingQueue.empty())
+            {
+                auto &qm = p.outgoingQueue.front();
+                client->send(hdl, qm.payload, qm.opcode);
+                p.queue.pop_front();
+            }
+        });
+
     client->set_message_handler(
         [this](websocketpp::connection_hdl hdl, WsClient::message_ptr msg)
         {
-            handleIncomingMessage(hdl, msg->get_payload(), ConnectionType::Client);
+            auto con = client->get_con_from_hdl(hdl);
+            auto &p = activePeers[con->get_uri()->str()];
+            handleIncomingMessage(p, msg->get_payload());
         });
+
+    // on fail (handshake/transport error)
+    client->set_fail_handler(
+        [this](connection_hdl h)
+        {
+            auto con = client->get_con_from_hdl(h);
+            auto &p = activePeers[con->get_uri()->str()];
+            p.state = ConnectionState::FAILED;
+            scheduleReconnect(p);
+        });
+
+    // on close
+    client->set_close_handler(
+        [this](connection_hdl h)
+        {
+            auto con = client->get_con_from_hdl(h);
+            auto &p = activePeers[con->get_uri()->str()];
+            p.state = ConnectionState::CLOSED;
+            scheduleReconnect(p);
+        });
+
     std::thread([this]
                 { client->run(); })
         .detach();
@@ -70,7 +111,9 @@ void Network::initServer()
     server->set_message_handler(
         [this](websocketpp::connection_hdl hdl, WsServer::message_ptr msg)
         {
-            handleIncomingMessage(hdl, msg->get_payload(), ConnectionType::Server);
+            auto con = client->get_con_from_hdl(hdl);
+            auto &p = activePeers[con->get_uri()->str()];
+            handleIncomingMessage(p, msg->get_payload());
         });
     server->listen(ws_port);
     server->start_accept();
@@ -79,6 +122,20 @@ void Network::initServer()
         .detach();
 }
 
+void Network::scheduleReconnect(Peer &peer)
+{
+    if (peer.retryCount < 5) // Limit retries to avoid infinite loop
+    {
+        peer.retryCount++;
+        peer.nextRetry = std::chrono::steady_clock::now() + std::chrono::seconds(2 * peer.retryCount);
+        std::cout << "[LOG] Scheduling reconnect for peer " << peer.id << " in " << 2 * peer.retryCount << " seconds.\n";
+    }
+    else
+    {
+        std::cout << "[ERROR] Max retry limit reached for peer " << peer.id << ". Giving up.\n";
+        peer.state = ConnectionState::FAILED;
+    }
+}
 // Computes SHA-256 checksum of the data
 string Network::computeChecksum(const string &data)
 {
@@ -156,7 +213,7 @@ void Network::handleTangleUpdate(std::string receivedData)
     }
 }
 
-void Network::handleIncomingMessage(ConnectionHdl hdl, const std::string &payload, ConnectionType connectionType)
+void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
 {
     size_t pos = payload.find(":");
     if (pos != string::npos)
@@ -281,7 +338,7 @@ void Network::handleIncomingMessage(ConnectionHdl hdl, const std::string &payloa
         {
             cout << "[LOG] Received SYNC_REQ from peer. Sending Tangle data." << endl;
             // Respond with Tangle data
-            sendTangle(hdl, connectionType);
+            sendTangle(peer);
         }
         if (messageType == "SYNC_ACK")
         {
@@ -318,7 +375,7 @@ void Network::broadcastTransaction(const Transaction &Tx)
     cout << "[LOG][NEWTX] Broadcasted new transaction to peers." << endl;
 }
 
-void Network::sendTangle(const ConnectionHdl &hdl, ConnectionType connectionType)
+void Network::sendTangle(Peer &peer)
 {
     // Serialize the Tangle
     string message = tangle.serialize();
@@ -333,7 +390,7 @@ void Network::sendTangle(const ConnectionHdl &hdl, ConnectionType connectionType
     Json::StreamWriterBuilder writer;
     string jsonString = Json::writeString(writer, jsonData);
 
-    sendMessage(jsonString, "SYNC_ACK", hdl, connectionType);
+    sendMessage(jsonString, "SYNC_ACK", peer);
 
     cout << "[LOG][SYNC_ACK] Sent Tangle to peer ." << endl;
 }
@@ -342,19 +399,37 @@ void Network::sendTangle(const ConnectionHdl &hdl, ConnectionType connectionType
 // Connect to a peer via WebSocket (client side)
 void Network::connectWebSocket(Peer &peer)
 {
+    if (peer.state == ConnectionState::CONNECTING ||
+        peer.state == ConnectionState::OPEN)
+        return;
+
     websocketpp::lib::error_code ec;
     auto uri = "ws://" + peer.address + ":" + std::to_string(ws_port);
+    peer.uri = uri;
     auto con = client->get_connection(uri, ec);
-    if (ec){
+    if (ec)
+    {
+        p.state = ConnectionState::FAILED;
+        std::cerr << "[ERROR] Websocket connection NOT established with peer "
+                  << peer.id << " at " << peer.address << " : " << peer.port << ". Reason: " << ec.message() << '\n';
         throw std::runtime_error(ec.message());
     }
-        
+
     // Save outbound handle
     peer.client_hdl = con->get_handle();
 
-    client->connect(con);
-
-    std::cout << "Websocket connected to peer: " << peer.id << " at " << peer.address << ":" << peer.port << "\n";
+    try
+    {
+        p.state = ConnectionState::CONNECTING;
+        client->connect(con);
+        std::cout << "Websocket connected to peer: " << peer.id << " at " << peer.address << ":" << peer.port << "\n";
+    }
+    catch (const std::exception &e)
+    {
+        p.state = ConnectionState::FAILED;
+        std::cerr << "[ERROR] Websocket connection NOT established with peer"
+                  << peer.id << " at " << peer.address << " : " << peer.port << ". Reason: " << e.what() << '\n';
+    }
 }
 
 // General function to send a message to all active peers. Input - Message and Message Type
@@ -365,34 +440,33 @@ void Network::broadcastMessage(const string &message, const string &messageType)
         // Construct the message with type prefix
         string fullMessage = messageType + ": " + message;
 
-        if (!peer.client_hdl.expired())
-        {
-            sendMessage(message, messageType, peer.client_hdl, ConnectionType::Client);
-        }
-        // send via server if inbound connection exists
-        else if (!peer.server_hdl.expired())
-        {
-            sendMessage(message, messageType, peer.server_hdl, ConnectionType::Server);
-        }
+        sendMessage(message, messageType, peer);
     }
 }
-void Network::sendMessage(const string &message, const string &messageType, const ConnectionHdl &hdl, const ConnectionType connectionType)
+
+void Network::sendMessage(const string &message, const string &messageType, Peer &peer)
 {
     // Construct the message with type prefix
     string fullMessage = messageType + ": " + message;
+    websocketpp::connection_hdl hdl = peer.client_hdl;
 
     try
     {
-        if (connectionType == ConnectionType::Client)
+        if (peer.state == ConnectionState::OPEN)
+        {
             client->send(hdl, fullMessage, websocketpp::frame::opcode::text);
-        else if (connectionType == ConnectionType::Server)
-            server->send(hdl, fullMessage, websocketpp::frame::opcode::text);
+            cout << "[LOG] Sent message to peer: " << fullMessage << endl;
+            return;
+        }
 
-        cout << "[LOG] Sent message to peer: " << fullMessage << endl;
+        peer.outgoingQueue.push_back({fullMessage, websocketpp::frame::opcode::text});
+
+        connectWebSocket(peer);
+
+        std::cout << "[LOG] Message queued for peer: " << peer.id << " at " << peer.address << ":" << peer.port << endl;
     }
-    catch(const std::exception& e)
+    catch (const std::exception &e)
     {
         std::cerr << "[ERROR][SEND MESSAGE]" << e.what() << '\n';
     }
-    
 }
