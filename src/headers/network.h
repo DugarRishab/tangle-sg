@@ -49,6 +49,8 @@ private:
 	std::shared_ptr<WsClient> client;
 	std::shared_ptr<WsServer> server;
 
+	std::thread monitorThread;
+
 	Tangle &tangle;
 
 	void initClient();
