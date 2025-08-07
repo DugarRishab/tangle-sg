@@ -99,7 +99,9 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         auto finalDataSerialized = Tangle::serializeTransaction(finalTx);
         auto finalDataDeSerialized = Tangle::deserializeTransaction(finalDataSerialized); 
 
-        // check if finalDataDeSerialized matches with finalTx
+        // check if finalDataDeSerialized matches with finalTx and print where the mismatch is
+
+
         if(finalDataDeSerialized.data.transaction_id != finalTx.data.transaction_id ||
            finalDataDeSerialized.data.sender != finalTx.data.sender ||
            finalDataDeSerialized.data.receiver != finalTx.data.receiver ||
@@ -111,8 +113,20 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
            finalDataDeSerialized.metadata.lastUpdated != finalTx.metadata.lastUpdated)
         {
             std::cerr << "[ERROR]: Serialization Error Detected!" << "\n";
+
+            std::cout << "[MISMATCH] transaction_id: " << finalDataDeSerialized.data.transaction_id != finalTx.data.transaction_id << std::endl;
+            std::cout << "[MISMATCH] sender: " << finalDataDeSerialized.data.sender != finalTx.data.sender << std::endl;
+            std::cout << "[MISMATCH] receiver: " << finalDataDeSerialized.data.receiver != finalTx.data.receiver << std::endl;
+            std::cout << "[MISMATCH] amount: " << finalDataDeSerialized.data.amount != finalTx.data.amount << std::endl;
+            std::cout << "[MISMATCH] unit: " << finalDataDeSerialized.data.unit != finalTx.data.unit << std::endl;
+            std::cout << "[MISMATCH] price_per_unit: " << finalDataDeSerialized.data.price_per_unit != finalTx.data.price_per_unit << std::endl;
+            std::cout << "[MISMATCH] currency: " << finalDataDeSerialized.data.currency != finalTx.data.currency << std::endl;
+            std::cout << "[MISMATCH] cumulative_weight: " << finalDataDeSerialized.metadata.cumulative_weight != finalTx.metadata.cumulative_weight << std::endl;
+            std::cout << "[MISMATCH] lastUpdated: " << finalDataDeSerialized.metadata.lastUpdated != finalTx.metadata.lastUpdated << std::endl;
             break;
         }
+
+
 
 
         net.broadcastTransaction(finalTx);
