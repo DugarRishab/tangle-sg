@@ -105,17 +105,8 @@ void compareTransactions(const Transaction &a, const Transaction &b)
 
 void testSignaturePipeline(const Transaction &originalTx)
 {
-    // Step 1: Serialize tx_data with high precision
-    std::string originalSerializedData = Tangle::serializeTransactionData(originalTx);
-    std::cout << "[DEBUG] Original tx_data serialized: " << originalSerializedData << "\n";
 
-    // Step 2: Sign the serialized data
-    std::string signature = signTransaction(originalSerializedData);
-
-    // Step 3: Assign signature and serialize entire transaction
-    Transaction txWithSig = originalTx;
-    txWithSig.metadata.signature1 = signature;
-    std::string fullSerialized = Tangle::serializeTransaction(txWithSig);
+    std::string fullSerialized = Tangle::serializeTransaction(originalTx);
 
     // Step 4: Deserialize the transaction
     Transaction deserializedTx = Tangle::deserializeTransaction(fullSerialized);
@@ -124,7 +115,7 @@ void testSignaturePipeline(const Transaction &originalTx)
 
     // Step 5: Serialize tx_data again after deserialization
     std::string deserializedSerializedData = Tangle::serializeTransactionData(deserializedTx);
-    std::cout << "Deserialized tx_data serialized: " << deserializedSerializedData << "\n";
+    // std::cout << "Deserialized tx_data serialized: " << deserializedSerializedData << "\n";
 
     // Step 6: Verify the signature
     bool isValid = verifyTransaction(deserializedSerializedData, deserializedTx.metadata.signature1, deserializedTx.data.sender);
@@ -216,7 +207,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         testSignaturePipeline(finalTx);
 
         net.broadcastTransaction(finalTx);
-        this_thread::sleep_for(chrono::seconds(10));
+        this_thread::sleep_for(chrono::seconds(100));
     }
 }
 
