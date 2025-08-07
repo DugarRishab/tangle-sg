@@ -99,8 +99,44 @@ void compareTransactions(const Transaction &a, const Transaction &b)
                   << a.metadata.signature2 << " != " << b.metadata.signature2 << "\n";
 
 
-
+    // 
     
+}
+
+void testSignaturePipeline(const Transaction &originalTx)
+{
+    // Step 1: Serialize tx_data with high precision
+    std::string originalSerializedData = serializeTxData(originalTx.data);
+    std::cout << "[DEBUG] Original tx_data serialized: " << originalSerializedData << "\n";
+
+    // Step 2: Sign the serialized data
+    std::string signature = signMessage(originalSerializedData);
+
+    // Step 3: Assign signature and serialize entire transaction
+    Transaction txWithSig = originalTx;
+    txWithSig.metadata.signature1 = signature;
+    std::string fullSerialized = serializeTransaction(txWithSig);
+
+    // Step 4: Deserialize the transaction
+    Transaction deserializedTx = deserializeTransaction(fullSerialized);
+
+    compareTransactions(originalTx, deserializedTx);
+
+    // Step 5: Serialize tx_data again after deserialization
+    std::string deserializedSerializedData = serializeTxData(deserializedTx.data);
+    std::cout << "Deserialized tx_data serialized: " << deserializedSerializedData << "\n";
+
+    // Step 6: Verify the signature
+    bool isValid = verifySignature(deserializedSerializedData, deserializedTx.metadata.signature1, deserializedTx.data.sender);
+
+    std::cout << "Signature verification: " << (isValid ? "SUCCESS" : "FAILURE") << "\n";
+
+    // Optional: Debug mismatch
+    if (!isValid)
+    {
+        std::cout << "[Debug] Original:      " << originalSerializedData << "\n";
+        std::cout << "[Debug] Deserialized:  " << deserializedSerializedData << "\n";
+    }
 }
 
 void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
@@ -177,7 +213,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // check if finalDataDeSerialized matches with finalTx and print where the mismatch is
 
 
-        compareTransactions(finalTx, finalDataDeSerialized);
+        testSignaturePipeline(finalTx);
 
         net.broadcastTransaction(finalTx);
         this_thread::sleep_for(chrono::seconds(10));
