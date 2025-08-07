@@ -281,9 +281,9 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
         std::istringstream s(message);
         std::string errs;
 
-        
+        const bool isValidJson = Json::parseFromStream(reader, s, &jsonData, &errs);
 
-        if (Json::parseFromStream(reader, s, &jsonData, &errs))
+        if (isValidJson && jsonData.isObject())
         {
 
             // Extract tangle data
