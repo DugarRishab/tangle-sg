@@ -16,6 +16,7 @@
 #include <fstream>
 #include <cstdlib> // getenv, setenv, rand
 #include <ctime>   // time_t, time()
+#include <iomanip> // for std::quoted
 
 using namespace std;
 using namespace chrono;
@@ -25,6 +26,65 @@ namespace fs = std::filesystem;
 const std::string KEYFILE_PRIV = "keys/node.key";
 const std::string KEYFILE_PUB = "keys/node.pub";
 const std::string HMAC_SECRET_FILE = "secret/hmac_secret.txt";
+
+// Join a vector of strings by a delimiter
+static std::string join(const std::vector<std::string> &v, char delim = ';')
+{
+    std::ostringstream oss;
+    for (size_t i = 0; i < v.size(); ++i)
+    {
+        if (i)
+            oss << delim;
+        oss << v[i];
+    }
+    return oss.str();
+}
+
+void saveTangleToCSV(const std::vector<Transaction> &tangle,
+                     const std::string &filename)
+{
+    std::ofstream out(filename);
+    if (!out.is_open())
+    {
+        std::cerr << "Failed to open CSV file for writing: "
+                  << filename << std::endl;
+        return;
+    }
+
+    // 1) Write header
+    out << "transaction_id,sender,receiver,amount,unit,"
+           "price_per_unit,currency,timestamp,parents,"
+           "cumulative_weight,lastUpdated,signature1,signature2\n";
+
+    // 2) Write each transaction
+    for (auto const &tx : tangle)
+    {
+        // Format parents as a semicolon-separated list
+        std::string parents = join(tx.data.parents, ';');
+        auto &d = tx.data;
+        auto &m = tx.metadata;
+
+        // CSV-safe quoting for any field that may contain commas
+        out << std::quoted(d.transaction_id) << ','
+            << std::quoted(d.sender) << ','
+            << std::quoted(d.receiver) << ','
+            << std::setprecision(17) // full precision
+            << d.amount << ','
+            << std::quoted(d.unit) << ','
+            << std::setprecision(17)
+            << d.price_per_unit << ','
+            << std::quoted(d.currency) << ','
+            << d.timestamp << ','
+            << std::quoted(parents) << ','
+            << m.cumulative_weight << ','
+            << m.lastUpdated << ','
+            << std::quoted(m.signature1) << ','
+            << std::quoted(m.signature2) << '\n';
+    }
+
+    out.close();
+    std::cout << "Tangle saved to CSV: " << filename << std::endl;
+}
 
 void compareTransactions(const Transaction &a, const Transaction &b)
 {
@@ -146,7 +206,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 
     vector<int> timearray;
     int i = 0;
-    while (i < 100)
+    while (i < 10)
     {
         i++;
         
@@ -210,24 +270,9 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         this_thread::sleep_for(chrono::seconds(10));
     }
 
-    // save final Tangle state to disk
-    std::string serializedTangle = tangle.serialize();
+    saveTangleToCSV(tangle.transactions, "tangle_state.csv");
 
-    std::ofstream outFile("tangle_state.txt");
-    if (outFile.is_open())
-    {
-        outFile << serializedTangle;
-        outFile.close();
-        std::cout << "[LOG] Tangle state saved to tangle_state.txt" << std::endl;
-        // print tangle_state.txt location
-        std::cout << "[LOG] Tangle state file location: " << fs::absolute("tangle_state.txt") << std::endl;
-        
-        throw std::runtime_error("[LOG] Tangle state saved to tangle_state.txt. Exiting simulation.");
-    }
-    else
-    {
-        std::cerr << "[ERROR] Could not open tangle_state.txt for writing." << std::endl;
-    }
+    throw std::runtime_error("[LOG] Tangle state saved to tangle_state.txt. Exiting simulation.");
 }
 
 std::string loadOrCreateHMACSecret(const std::string &path)
