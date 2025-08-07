@@ -123,11 +123,11 @@ void testSignaturePipeline(const Transaction &originalTx)
     std::cout << "Signature verification: " << (isValid ? "SUCCESS" : "FAILURE") << "\n";
 
     // Optional: Debug mismatch
-    if (!isValid)
-    {
-        std::cout << "[Debug] Original:      " << originalSerializedData << "\n";
-        std::cout << "[Debug] Deserialized:  " << deserializedSerializedData << "\n";
-    }
+    // if (!isValid)
+    // {
+    //     std::cout << "[Debug] Original:      " << originalTx << "\n";
+    //     std::cout << "[Debug] Deserialized:  " << deserializedSerializedData << "\n";
+    // }
 }
 
 void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
