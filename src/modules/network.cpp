@@ -80,9 +80,11 @@ void Network::initClient()
                                 websocketpp::log::alevel::debug_handshake |
                                 websocketpp::log::alevel::fail |
                                 websocketpp::log::alevel::debug_close);
+    client->clear_error_channels(websocketpp::log::elevel::none);
     client->set_error_channels(websocketpp::log::elevel::all);
 
     client->init_asio();
+    client.start_perpetual();
 
     client->set_open_handler(
         [this](ConnectionHdl hdl)
