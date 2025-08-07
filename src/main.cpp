@@ -99,10 +99,21 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         auto finalDataSerialized = Tangle::serializeTransaction(finalTx);
         auto finalDataDeSerialized = Tangle::deserializeTransaction(finalDataSerialized); 
 
-        if(finalDataDeSerialized != finalTx){
+        // check if finalDataDeSerialized matches with finalTx
+        if(finalDataDeSerialized.data.transaction_id != finalTx.data.transaction_id ||
+           finalDataDeSerialized.data.sender != finalTx.data.sender ||
+           finalDataDeSerialized.data.receiver != finalTx.data.receiver ||
+           finalDataDeSerialized.data.amount != finalTx.data.amount ||
+           finalDataDeSerialized.data.unit != finalTx.data.unit ||
+           finalDataDeSerialized.data.price_per_unit != finalTx.data.price_per_unit ||
+           finalDataDeSerialized.data.currency != finalTx.data.currency ||
+           finalDataDeSerialized.metadata.cumulative_weight != finalTx.metadata.cumulative_weight ||
+           finalDataDeSerialized.metadata.lastUpdated != finalTx.metadata.lastUpdated)
+        {
             std::cerr << "[ERROR]: Serialization Error Detected!" << "\n";
             break;
         }
+
 
         net.broadcastTransaction(finalTx);
         this_thread::sleep_for(chrono::seconds(10));
