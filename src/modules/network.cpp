@@ -77,12 +77,13 @@ void Network::initClient()
 
     client->clear_access_channels(websocketpp::log::alevel::all);
     client->set_access_channels(websocketpp::log::alevel::connect |
-                               websocketpp::log::alevel::handshake |
-                               websocketpp::log::alevel::fail);
+                                websocketpp::log::alevel::debug_handshake |
+                                websocketpp::log::alevel::fail |
+                                websocketpp::log::alevel::debug_close);
     client->set_error_channels(websocketpp::log::elevel::all);
 
     client->init_asio();
-    
+
     client->set_open_handler(
         [this](ConnectionHdl hdl)
         {
