@@ -106,7 +106,7 @@ void compareTransactions(const Transaction &a, const Transaction &b)
 void testSignaturePipeline(const Transaction &originalTx)
 {
     // Step 1: Serialize tx_data with high precision
-    std::string originalSerializedData = Tangle::serializeTransactionData(originalTx.data);
+    std::string originalSerializedData = Tangle::serializeTransactionData(originalTx);
     std::cout << "[DEBUG] Original tx_data serialized: " << originalSerializedData << "\n";
 
     // Step 2: Sign the serialized data
@@ -123,7 +123,7 @@ void testSignaturePipeline(const Transaction &originalTx)
     compareTransactions(originalTx, deserializedTx);
 
     // Step 5: Serialize tx_data again after deserialization
-    std::string deserializedSerializedData = Tangle::serializeTransactionData(deserializedTx.data);
+    std::string deserializedSerializedData = Tangle::serializeTransactionData(deserializedTx);
     std::cout << "Deserialized tx_data serialized: " << deserializedSerializedData << "\n";
 
     // Step 6: Verify the signature
