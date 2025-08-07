@@ -40,7 +40,7 @@ static std::string join(const std::vector<std::string> &v, char delim = ';')
     return oss.str();
 }
 
-void saveTangleToCSV(const std::vector<Transaction> &tangle,
+void saveTangleToCSV(std::unordered_map<std::string, Transaction> transactions,
                      const std::string &filename)
 {
     std::ofstream out(filename);
@@ -57,10 +57,13 @@ void saveTangleToCSV(const std::vector<Transaction> &tangle,
            "cumulative_weight,lastUpdated,signature1,signature2\n";
 
     // 2) Write each transaction
-    for (auto const &tx : tangle)
+    for (auto const item : transactions)
     {
+        const Transaction &tx = item.second;
+
         // Format parents as a semicolon-separated list
         std::string parents = join(tx.data.parents, ';');
+
         auto &d = tx.data;
         auto &m = tx.metadata;
 
