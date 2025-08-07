@@ -84,7 +84,7 @@ void Network::initClient()
     client->set_error_channels(websocketpp::log::elevel::all);
 
     client->init_asio();
-    client.start_perpetual();
+    client->start_perpetual();
 
     client->set_open_handler(
         [this](ConnectionHdl hdl)
