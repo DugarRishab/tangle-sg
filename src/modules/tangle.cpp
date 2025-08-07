@@ -301,6 +301,12 @@ bool Tangle::transactionNeedsUpdate(Transaction &tx)
     auto it = transactions.find(tx.data.transaction_id);
     if (it != transactions.end())
     {
+
+        if(!tx.metadata.signature2.empty() && it->second.metadata.signature2.empty()){
+            // If the transaction is double signed, it needs to be updated
+            return true;
+        }
+
         // Check if the new transaction is newer than the existing one
         return tx.metadata.lastUpdated > it->second.metadata.lastUpdated;
     }
@@ -317,6 +323,9 @@ void Tangle::updateTransaction(Transaction &tx){
     {
         it->second.metadata.cumulative_weight = tx.metadata.cumulative_weight;
         it->second.metadata.lastUpdated = tx.metadata.lastUpdated;
+
+        if(!tx.metadata.signature2.empty())
+            it->second.metadata.signature2 = tx.metadata.signature2;
     }
     else
     {
