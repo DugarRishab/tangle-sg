@@ -37,10 +37,10 @@ std::mutex tangleMutex;
 Transaction Tangle::addNewTransaction( Transaction &tx)
 {
     // calculate checksum
-    string txData = serializeTransactionData(tx);
+    
     // assing uid to the tra
     tx.data.transaction_id = to_string(tx.data.timestamp) + "_" + tx.data.sender + "_" + tx.data.receiver;
-
+    string txData = serializeTransactionData(tx);
     // Ignoring checksum because signatiures are used for integrity
     // string checksum = computeChecksum(txData);
     // Update metadata
