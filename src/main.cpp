@@ -204,7 +204,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // check if finalDataDeSerialized matches with finalTx and print where the mismatch is
 
 
-        testSignaturePipeline(finalTx);
+        // testSignaturePipeline(finalTx);
 
         net.broadcastTransaction(finalTx);
         this_thread::sleep_for(chrono::seconds(100));

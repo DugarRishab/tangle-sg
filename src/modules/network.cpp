@@ -75,13 +75,13 @@ void Network::initClient()
     client = std::make_shared<WsClient>();
     
 
-    client->clear_access_channels(websocketpp::log::alevel::all);
-    client->set_access_channels(websocketpp::log::alevel::connect |
-                                websocketpp::log::alevel::debug_handshake |
-                                websocketpp::log::alevel::fail |
-                                websocketpp::log::alevel::debug_close);
-    client->clear_error_channels(websocketpp::log::elevel::none);
-    client->set_error_channels(websocketpp::log::elevel::all);
+    // client->clear_access_channels(websocketpp::log::alevel::all);
+    // client->set_access_channels(websocketpp::log::alevel::connect |
+    //                             websocketpp::log::alevel::debug_handshake |
+    //                             websocketpp::log::alevel::fail |
+    //                             websocketpp::log::alevel::debug_close);
+    // client->clear_error_channels(websocketpp::log::elevel::none);
+    // client->set_error_channels(websocketpp::log::elevel::all);
 
     client->init_asio();
     client->start_perpetual();
