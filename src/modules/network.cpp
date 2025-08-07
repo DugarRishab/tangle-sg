@@ -274,20 +274,22 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
     if (pos != string::npos)
     {
         string messageType = payload.substr(0, pos);
-        string message = payload.substr(pos + 1);
+        string message = payload.substr(pos + 8);
         // parse the message assuming it is in JSON format. seperate tangle, checksum, and timestamp
         Json::Value jsonData;
         Json::CharReaderBuilder reader;
         std::istringstream s(message);
         std::string errs;
 
-        // Extract tangle data
-        string data = jsonData["data"].asString();
-        string checksum = jsonData["checksum"].asString();
-        string timestamp = jsonData["timestamp"].asString();
+        
 
         if (Json::parseFromStream(reader, s, &jsonData, &errs))
         {
+
+            // Extract tangle data
+            string data = jsonData["data"].asString();
+            string checksum = jsonData["checksum"].asString();
+            string timestamp = jsonData["timestamp"].asString();
 
             // Verify checksum
             if (verifyChecksum(data, checksum))
