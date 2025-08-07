@@ -20,6 +20,9 @@ public:
     static Transaction deserializeTransaction(const std::string& data); // Deserializes a single transaction
     void updateFromSerialized(const std::string& data); // Updates Tangle from serialized string
     std::unordered_map<std::string, Transaction> transactions;
+    bool transactionPresent( Transaction& tx);
+    bool transactionNeedsUpdate(Transaction &tx);
+    void updateTransaction(Transaction &tx);
 
 private:
     std::mutex tangleMutex; // Mutex to protect shared Tangle access

@@ -104,7 +104,7 @@ void compareTransactions(const Transaction &a, const Transaction &b)
 }
 
 void testSignaturePipeline(const Transaction &originalTx)
-{
+{ 
 
     std::string fullSerialized = Tangle::serializeTransaction(originalTx);
 

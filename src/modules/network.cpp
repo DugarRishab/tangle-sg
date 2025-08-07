@@ -318,7 +318,8 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
             cout << "[LOG] Received new transaction from peer: " << message << endl;
             // Handle new transaction
             Transaction newTx = Tangle::deserializeTransaction(data);
-            // TODO: verify checksum of tx
+
+            
 
             // TODO: check sign status of tx
             if (newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
@@ -364,7 +365,33 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     cout << "[LOG] Transaction is not for this node. Not signing." << endl;
                 }
 
-                tangle.addTransaction(newTx);
+                // check if the tx is present in the Tangle
+                if (tangle.transactionPresent(newTx))
+                {
+                    cout << "[LOG] Transaction already present in Tangle." << endl;
+
+                    if (!tangle.transactionNeedsUpdate(newTx))
+                    {
+                        cout << "[LOG] Transaction doesn't need to be updated." << endl;
+                        cout << "[LOG] Tx not BROADCASTED further" << endl;
+                        return;
+                    }
+                    else
+                    {
+                        cout << "[LOG] Transaction needs to be updated." << endl;
+                        tangle.updateTransaction(newTx);
+                        broadcastTransaction(newTx);
+                    }
+                }
+                else
+                {
+                    cout << "[LOG] Transaction not present in Tangle. Adding it." << endl;
+                    tangle.addTransaction(newTx);
+                    broadcastTransaction(newTx);
+                }
+                
+
+                
             }
             // double signed transaction
             else if (!newTx.metadata.signature1.empty() && !newTx.metadata.signature2.empty())
@@ -386,14 +413,37 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                 }
                 // perform PoW
 
-                tangle.addTransaction(newTx);
+                if (tangle.transactionPresent(newTx))
+                {
+                    cout << "[LOG] Transaction already present in Tangle." << endl;
+
+                    if (!tangle.transactionNeedsUpdate(newTx))
+                    {
+                        cout << "[LOG] Transaction doesn't need to be updated." << endl;
+                        
+                    }
+                    else
+                    {
+                        cout << "[LOG] Transaction needs to be updated." << endl;
+                        tangle.updateTransaction(newTx);
+                        
+                    }
+                }
+                else
+                {
+                    cout << "[LOG] Transaction not present in Tangle. Adding it." << endl;
+                    tangle.addTransaction(newTx);
+                    
+                }
+
+                
                 performPoW(newTx.data.transaction_id, 2);
                 tangle.updateCumulativeWeight(newTx.data.transaction_id); // Increase cumulative weight for new transaction
-            }
 
-            cout << "[LOG] New transaction added to Tangle: " << newTx.data.transaction_id << endl;
-            // TODO: broadcast this transaction to all peers
-            broadcastTransaction(newTx);
+                Transaction updatedTx = tangle.transactions[newTx.data.transaction_id];
+                broadcastTransaction(newTx);
+            }
+            
         }
         if (messageType == "SYNC_REQ")
         {
@@ -408,7 +458,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
             string data = jsonData["data"].asString();
             string checksum = jsonData["checksum"].asString();
             string timestamp = jsonData["timestamp"].asString();
-            
+
             handleTangleUpdate(data);
         }
     }

@@ -285,3 +285,43 @@ void Tangle::updateFromSerialized(const string &data)
     cout << "[LOG] Last transaction ID: " << lastTx.data.transaction_id << endl;
     cout << "[LOG] Last transaction timestamp: " << lastTx.data.timestamp << endl;
 }
+
+// function to check if tx is already present in the tangle
+bool Tangle::transactionPresent(Transaction &tx){
+    lock_guard<mutex> lock(tangleMutex);
+    
+    // Check if the transaction ID exists in the Tangle's transactions
+    return transactions.find(tx.data.transaction_id) != transactions.end();
+}
+
+bool Tangle::transactionNeedsUpdate(Transaction &tx)
+{
+    lock_guard<mutex> lock(tangleMutex);
+    
+    auto it = transactions.find(tx.data.transaction_id);
+    if (it != transactions.end())
+    {
+        // Check if the new transaction is newer than the existing one
+        return tx.metadata.lastUpdated > it->second.metadata.lastUpdated;
+    }
+    // Transaction not found, so it needs to be added
+    return true;
+}
+
+// Function to only update the metadata of a transaction in the Tangle
+void Tangle::updateTransaction(Transaction &tx){
+    // only update cumulative weight and last updated time
+    lock_guard<mutex> lock(tangleMutex);
+    auto it = transactions.find(tx.data.transaction_id);
+    if (it != transactions.end())
+    {
+        it->second.metadata.cumulative_weight = tx.metadata.cumulative_weight;
+        it->second.metadata.lastUpdated = tx.metadata.lastUpdated;
+    }
+    else
+    {
+        cerr << "[ERROR] Transaction not found in Tangle for update: " << tx.data.transaction_id << endl;
+    }
+}
+
+
