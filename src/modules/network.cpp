@@ -73,8 +73,16 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
 void Network::initClient()
 {
     client = std::make_shared<WsClient>();
-    client->init_asio();
+    
 
+    client->clear_access_channels(websocketpp::log::alevel::all);
+    client->set_access_channels(websocketpp::log::alevel::connect |
+                               websocketpp::log::alevel::handshake |
+                               websocketpp::log::alevel::fail);
+    client->set_error_channels(websocketpp::log::elevel::all);
+
+    client->init_asio();
+    
     client->set_open_handler(
         [this](ConnectionHdl hdl)
         {
@@ -84,7 +92,7 @@ void Network::initClient()
             p.state = ConnectionState::OPEN;
             p.retryCount = 0;
 
-            std::cout << "[LOG] WebSocket connection established with peer "
+            std::cout << "[LOG] WebSocket connection OPENED with peer "
                       << p.id << " at " << p.address << " : " << p.port << "\n";
 
             // flush queued messages
