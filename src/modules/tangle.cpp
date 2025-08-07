@@ -137,7 +137,7 @@ string Tangle::serializeTransaction(const Transaction &tx)
        << tx.data.receiver << ","
        << fixed << setprecision(5) << tx.data.amount << ","
        << tx.data.unit << ","
-       << fixed << setprecision(5) tx.data.price_per_unit << ","
+       << fixed << setprecision(5) << tx.data.price_per_unit << ","
        << tx.data.currency << ","
        << tx.metadata.cumulative_weight << ","
        << tx.metadata.lastUpdated << ","
