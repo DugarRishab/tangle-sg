@@ -73,6 +73,9 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id)
     lock_guard<mutex> lock(tangleMutex);
 
     transactions[transaction_id].metadata.cumulative_weight++;
+    std::cout << "[LOG] Cumulative weight updated for transaction: "
+              << ". New cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
+              
     transactions[transaction_id].metadata.lastUpdated = time(nullptr);
     // Update cumulative weight for all parents
     // TODO: make it recursive for each parent until genesis
@@ -82,6 +85,9 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id)
         {
             transactions[parent].metadata.cumulative_weight++;
             transactions[parent].metadata.lastUpdated = time(nullptr);
+        }
+        else{
+            std::cerr << "[ERROR] Parent transaction " << parent << " not found in Tangle." << std::endl;
         }
     }
 }

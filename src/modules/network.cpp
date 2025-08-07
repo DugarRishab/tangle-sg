@@ -411,7 +411,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     cerr << "[ERROR] Transaction signature verification failed." << endl;
                     return;
                 }
-                // perform PoW
+            
 
                 if (tangle.transactionPresent(newTx))
                 {
@@ -434,6 +434,8 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                 {
                     cout << "[LOG] Transaction not present in Tangle. Adding it." << endl;
                     tangle.addTransaction(newTx);
+
+                    cout << "[LOG] Performing PoW on transaction: " << newTx.data.transaction_id << endl;
 
                     performPoW(newTx.data.transaction_id, 2);
                     tangle.updateCumulativeWeight(newTx.data.transaction_id); // Increase cumulative weight for new transaction
