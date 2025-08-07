@@ -60,9 +60,13 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         }
 
         vector<string> parents = selectTips(tangle, 2);
-
+        std::cout << "[LOG][SIMULATOR] Using Peer List ->" << std::endl;
+        for (const auto &peer : peerList)
+        {
+            std::cout << "Peer ID: " << peer.id << ", Address: " << peer.address << ", Port: " << peer.port << std::endl;
+        }
         // receiver is selected randomly from the list of active peers
-        string receiver = peers.getPeerList()[rand() % peers.getPeerList().size()].id;                                                                                                                                    
+        string receiver = peerList[rand() % peers.getPeerList().size()].id;                                                                                                                                    
         
         newTx.data.timestamp = time(nullptr);
         newTx.data.timestampInt = static_cast<int>(time(nullptr));
@@ -91,6 +95,14 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 
         cout << "[LOG] Transaction " << finalTx.data.transaction_id << " added to Tangle." << endl;
         cout << "Time elapsed:" << elapsed << " ms" << endl;
+
+        auto finalDataSerialized = Tangle::serializeTransaction(finalTx);
+        auto finalDataDeSerialized = Tangle::deserializeTransaction(finalDataSerialized); 
+
+        if(finalDataDeSerialized != finalTx){
+            std::cerr << "[ERROR]: Serialization Error Detected!" << "\n";
+            break;
+        }
 
         net.broadcastTransaction(finalTx);
         this_thread::sleep_for(chrono::seconds(10));
