@@ -146,7 +146,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 
     vector<int> timearray;
     int i = 0;
-    while (i < 1000)
+    while (i < 100)
     {
         i++;
         
@@ -207,7 +207,24 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // testSignaturePipeline(finalTx);
 
         net.broadcastTransaction(finalTx);
-        this_thread::sleep_for(chrono::seconds(100));
+        this_thread::sleep_for(chrono::seconds(10));
+    }
+
+    // save final Tangle state to disk
+    std::string serializedTangle = tangle.serialize();
+
+    std::ofstream outFile("tangle_state.txt");
+    if (outFile.is_open())
+    {
+        outFile << serializedTangle;
+        outFile.close();
+        std::cout << "[LOG] Tangle state saved to tangle_state.txt" << std::endl;
+        // print tangle_state.txt location
+        std::cout << "[LOG] Tangle state file location: " << fs::absolute("tangle_state.txt") << std::endl;
+    }
+    else
+    {
+        std::cerr << "[ERROR] Could not open tangle_state.txt for writing." << std::endl;
     }
 }
 
