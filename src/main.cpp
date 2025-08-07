@@ -106,11 +106,11 @@ void compareTransactions(const Transaction &a, const Transaction &b)
 void testSignaturePipeline(const Transaction &originalTx)
 {
     // Step 1: Serialize tx_data with high precision
-    std::string originalSerializedData = serializeTxData(originalTx.data);
+    std::string originalSerializedData = serializeTransactionData(originalTx.data);
     std::cout << "[DEBUG] Original tx_data serialized: " << originalSerializedData << "\n";
 
     // Step 2: Sign the serialized data
-    std::string signature = signMessage(originalSerializedData);
+    std::string signature = signTransaction(originalSerializedData);
 
     // Step 3: Assign signature and serialize entire transaction
     Transaction txWithSig = originalTx;
@@ -123,11 +123,11 @@ void testSignaturePipeline(const Transaction &originalTx)
     compareTransactions(originalTx, deserializedTx);
 
     // Step 5: Serialize tx_data again after deserialization
-    std::string deserializedSerializedData = serializeTxData(deserializedTx.data);
+    std::string deserializedSerializedData = serializeTransactionData(deserializedTx.data);
     std::cout << "Deserialized tx_data serialized: " << deserializedSerializedData << "\n";
 
     // Step 6: Verify the signature
-    bool isValid = verifySignature(deserializedSerializedData, deserializedTx.metadata.signature1, deserializedTx.data.sender);
+    bool isValid = verifyTransaction(deserializedSerializedData, deserializedTx.metadata.signature1, deserializedTx.data.sender);
 
     std::cout << "Signature verification: " << (isValid ? "SUCCESS" : "FAILURE") << "\n";
 
