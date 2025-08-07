@@ -26,7 +26,82 @@ const std::string KEYFILE_PRIV = "keys/node.key";
 const std::string KEYFILE_PUB = "keys/node.pub";
 const std::string HMAC_SECRET_FILE = "secret/hmac_secret.txt";
 
+void compareTransactions(const Transaction &a, const Transaction &b)
+{
+    std::cout << std::boolalpha; // print bools as true/false
 
+    // Compare the core data fields
+    if (a.data.transaction_id != b.data.transaction_id)
+        std::cout << "[MISMATCH] transaction_id: "
+                  << a.data.transaction_id << " != " << b.data.transaction_id << "\n";
+
+    if (a.data.sender != b.data.sender)
+        std::cout << "[MISMATCH] sender: "
+                  << a.data.sender << " != " << b.data.sender << "\n";
+
+    if (a.data.receiver != b.data.receiver)
+        std::cout << "[MISMATCH] receiver: "
+                  << a.data.receiver << " != " << b.data.receiver << "\n";
+
+    if (a.data.amount != b.data.amount)
+        std::cout << "[MISMATCH] amount: "
+                  << a.data.amount << " != " << b.data.amount << "\n";
+
+    if (a.data.unit != b.data.unit)
+        std::cout << "[MISMATCH] unit: "
+                  << a.data.unit << " != " << b.data.unit << "\n";
+
+    if (a.data.price_per_unit != b.data.price_per_unit)
+        std::cout << "[MISMATCH] price_per_unit: "
+                  << a.data.price_per_unit << " != " << b.data.price_per_unit << "\n";
+
+    if (a.data.currency != b.data.currency)
+        std::cout << "[MISMATCH] currency: "
+                  << a.data.currency << " != " << b.data.currency << "\n";
+
+    if (a.data.timestamp != b.data.timestamp)
+        std::cout << "[MISMATCH] timestamp: "
+                  << a.data.timestamp << " != " << b.data.timestamp << "\n";
+
+    // If you track parent IDs as a vector, you can compare lengths or each element:
+    if (a.data.parents.size() != b.data.parents.size())
+    {
+        std::cout << "[MISMATCH] number of parents: "
+                  << a.data.parents.size() << " != " << b.data.parents.size() << "\n";
+    }
+    else
+    {
+        for (size_t i = 0; i < a.data.parents.size(); ++i)
+        {
+            if (a.data.parents[i] != b.data.parents[i])
+            {
+                std::cout << "[MISMATCH] parent[" << i << "]: "
+                          << a.data.parents[i] << " != " << b.data.parents[i] << "\n";
+            }
+        }
+    }
+
+    // Compare metadata
+    if (a.metadata.cumulative_weight != b.metadata.cumulative_weight)
+        std::cout << "[MISMATCH] cumulative_weight: "
+                  << a.metadata.cumulative_weight << " != " << b.metadata.cumulative_weight << "\n";
+
+    if (a.metadata.lastUpdated != b.metadata.lastUpdated)
+        std::cout << "[MISMATCH] lastUpdated: "
+                  << a.metadata.lastUpdated << " != " << b.metadata.lastUpdated << "\n";
+
+    // If you store signatures, you can compare them too:
+    if (a.metadata.signature1 != b.metadata.signature1)
+        std::cout << "[MISMATCH] signature1: "
+                  << a.metadata.signature1 << " != " << b.metadata.signature1 << "\n";
+    if (a.metadata.signature2 != b.metadata.signature2)
+        std::cout << "[MISMATCH] signature2: "
+                  << a.metadata.signature2 << " != " << b.metadata.signature2 << "\n";
+
+
+
+    
+}
 
 void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 {
@@ -102,32 +177,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // check if finalDataDeSerialized matches with finalTx and print where the mismatch is
 
 
-        if(finalDataDeSerialized.data.transaction_id != finalTx.data.transaction_id ||
-           finalDataDeSerialized.data.sender != finalTx.data.sender ||
-           finalDataDeSerialized.data.receiver != finalTx.data.receiver ||
-           finalDataDeSerialized.data.amount != finalTx.data.amount ||
-           finalDataDeSerialized.data.unit != finalTx.data.unit ||
-           finalDataDeSerialized.data.price_per_unit != finalTx.data.price_per_unit ||
-           finalDataDeSerialized.data.currency != finalTx.data.currency ||
-           finalDataDeSerialized.metadata.cumulative_weight != finalTx.metadata.cumulative_weight ||
-           finalDataDeSerialized.metadata.lastUpdated != finalTx.metadata.lastUpdated)
-        {
-            std::cerr << "[ERROR]: Serialization Error Detected!" << "\n";
-
-            std::cout << "[MISMATCH] transaction_id: " << ( finalDataDeSerialized.data.transaction_id != finalTx.data.transaction_id ) << std::endl;
-            std::cout << "[MISMATCH] sender: " << ( finalDataDeSerialized.data.sender != finalTx.data.sender ) << std::endl;
-            std::cout << "[MISMATCH] receiver: " << ( finalDataDeSerialized.data.receiver != finalTx.data.receiver ) << std::endl;
-            std::cout << "[MISMATCH] amount: " << ( finalDataDeSerialized.data.amount != finalTx.data.amount ) << std::endl;
-            std::cout << "[MISMATCH] unit: " << ( finalDataDeSerialized.data.unit != finalTx.data.unit ) << std::endl;
-            std::cout << "[MISMATCH] price_per_unit: " << ( finalDataDeSerialized.data.price_per_unit != finalTx.data.price_per_unit ) << std::endl;
-            std::cout << "[MISMATCH] currency: " << ( finalDataDeSerialized.data.currency != finalTx.data.currency ) << std::endl;
-            std::cout << "[MISMATCH] cumulative_weight: " << ( finalDataDeSerialized.metadata.cumulative_weight != finalTx.metadata.cumulative_weight ) << std::endl;
-            std::cout << "[MISMATCH] lastUpdated: " << ( finalDataDeSerialized.metadata.lastUpdated != finalTx.metadata.lastUpdated ) << std::endl;
-            break;
-        }
-
-
-
+        compareTransactions(finalTx, finalDataDeSerialized);
 
         net.broadcastTransaction(finalTx);
         this_thread::sleep_for(chrono::seconds(10));
