@@ -113,7 +113,7 @@ void Network::initClient()
         {
             auto con = client->get_con_from_hdl(hdl);
             auto &p = activePeers[con->get_uri()->str()];
-
+            std::cout << "[LOG] PACKET FROM URI: " << con->get_uri()->str() << "\n";
             std::cout << "[LOG] Received message from peer " << p.id << " at " << p.address << " : " << p.port << "\n";
             handleIncomingMessage(p, msg->get_payload());
         });
@@ -270,7 +270,7 @@ void Network::handleTangleUpdate(std::string receivedData)
 
 void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
 {
-    size_t pos = payload.find(":");
+    size_t pos = payload.find("::TYPE::");
     if (pos != string::npos)
     {
         string messageType = payload.substr(0, pos);
@@ -493,7 +493,7 @@ void Network::broadcastMessage(const string &message, const string &messageType)
     for (auto &item : activePeers)
     {
         // Construct the message with type prefix
-        string fullMessage = messageType + ": " + message;
+        string fullMessage = messageType + "::TYPE::" + message;
 
         sendMessage(message, messageType, item.second);
     }
@@ -502,7 +502,7 @@ void Network::broadcastMessage(const string &message, const string &messageType)
 void Network::sendMessage(const string &message, const string &messageType, Peer &peer)
 {
     // Construct the message with type prefix
-    string fullMessage = messageType + ": " + message;
+    string fullMessage = messageType + "::TYPE::" + message;
     ConnectionHdl hdl = peer.client_hdl;
 
     try
