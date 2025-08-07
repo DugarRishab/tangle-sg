@@ -311,6 +311,10 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
 
         if (messageType == "NEWTX")
         {
+            string data = jsonData["data"].asString();
+            string checksum = jsonData["checksum"].asString();
+            string timestamp = jsonData["timestamp"].asString();
+
             cout << "[LOG] Received new transaction from peer: " << message << endl;
             // Handle new transaction
             Transaction newTx = Tangle::deserializeTransaction(data);
@@ -401,6 +405,10 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
         {
             cout << "[LOG] Received SYNC_ACK from peer. Tangle data synchronized." << endl;
             // TODO: accept tangle data from peer
+            string data = jsonData["data"].asString();
+            string checksum = jsonData["checksum"].asString();
+            string timestamp = jsonData["timestamp"].asString();
+            
             handleTangleUpdate(data);
         }
     }
