@@ -95,9 +95,9 @@ string Tangle::serializeTransactionData(const Transaction &tx)
        << tx.data.timestamp << ","
        << tx.data.sender << ","
        << tx.data.receiver << ","
-       << tx.data.amount << ","
+       << fixed << setprecision(17) << tx.data.amount << ","
        << tx.data.unit << ","
-       << tx.data.price_per_unit << ","
+       << fixed << setprecision(17) << tx.data.price_per_unit << ","
        << tx.data.currency;
 
     // Serialize previous transactions
