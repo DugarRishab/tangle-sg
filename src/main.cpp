@@ -221,6 +221,8 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         std::cout << "[LOG] Tangle state saved to tangle_state.txt" << std::endl;
         // print tangle_state.txt location
         std::cout << "[LOG] Tangle state file location: " << fs::absolute("tangle_state.txt") << std::endl;
+        
+        throw std::runtime_error("[LOG] Tangle state saved to tangle_state.txt. Exiting simulation.");
     }
     else
     {
