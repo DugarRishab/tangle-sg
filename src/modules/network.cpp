@@ -426,22 +426,22 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     {
                         cout << "[LOG] Transaction needs to be updated." << endl;
                         tangle.updateTransaction(newTx);
-                        
+
+                        broadcastTransaction(newTx);
                     }
                 }
                 else
                 {
                     cout << "[LOG] Transaction not present in Tangle. Adding it." << endl;
                     tangle.addTransaction(newTx);
-                    
+
+                    performPoW(newTx.data.transaction_id, 2);
+                    tangle.updateCumulativeWeight(newTx.data.transaction_id); // Increase cumulative weight for new transaction
+
+                    Transaction updatedTx = tangle.transactions[newTx.data.transaction_id];
+                    broadcastTransaction(newTx);
                 }
 
-                
-                performPoW(newTx.data.transaction_id, 2);
-                tangle.updateCumulativeWeight(newTx.data.transaction_id); // Increase cumulative weight for new transaction
-
-                Transaction updatedTx = tangle.transactions[newTx.data.transaction_id];
-                broadcastTransaction(newTx);
             }
             
         }
