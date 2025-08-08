@@ -71,7 +71,8 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id)
 {
 
     lock_guard<mutex> lock(tangleMutex);
-
+    std::cout << "[LOG][WEIGHT] current cumulative weight for transaction: "
+              << transaction_id << " is " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
     transactions[transaction_id].metadata.cumulative_weight++;
     std::cout << "[LOG] Cumulative weight updated for transaction: "
               << ". New cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
@@ -314,6 +315,9 @@ bool Tangle::transactionNeedsUpdate(Transaction &tx)
         }
 
         // Check if the new transaction is newer than the existing one
+        std::cout << "[LOG][UPDATE] received last update time: "
+                  << tx.metadata.lastUpdated << " existing last update time: "
+                  << it->second.metadata.lastUpdated << std::endl;
         return tx.metadata.lastUpdated > it->second.metadata.lastUpdated;
     }
     // Transaction not found, so it needs to be added

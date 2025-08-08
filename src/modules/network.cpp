@@ -339,7 +339,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
 
                 if (verifyTransaction(txSearialized, sig_b64, newTx.data.sender)) // Verify signature 1 is sender's signature
                 {
-                    cout << "[LOG] Transaction is signed by sender. Adding to Tangle." << endl;
+                    cout << "[LOG] Transaction is signed by sender." << endl;
                     // If the transaction is only signed by sender, we can add it to the Tangle
                     // but we need to perform PoW later
                 }
@@ -358,7 +358,9 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     // Sign the transaction with the receiver's signature
                     newTx.metadata.signature2 = signTransaction(txSearialized);
                     newTx.metadata.lastUpdated = time(nullptr);
-                    newTx.metadata.cumulative_weight = 0; // Initialize cumulative weight
+                    // perform PoW on the transaction
+                    performPoW(newTx.data.transaction_id, 2);
+                    newTx.metadata.cumulative_weight = 1; // Initialize cumulative weight
                 }
                 else
                 {
