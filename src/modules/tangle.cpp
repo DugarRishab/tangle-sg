@@ -57,7 +57,7 @@ Transaction Tangle::addNewTransaction(Transaction &tx)
 
     return tx;
 }
-int Tangle::addTransaction(const Transaction &tx, int update)
+int Tangle::addTransaction( Transaction &tx, int update)
 {
     // Lock the mutex to protect shared Tangle access
     lock_guard<mutex> lock(tangleMutex);
