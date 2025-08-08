@@ -359,7 +359,8 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                 if(isTxPresent == 1)
                 {
                     cout << "[LOG] Transaction already exists in Tangle. Updating it." << endl;
-                    broadcastTransaction(tx);
+
+                    broadcastTransaction(tangle.transactions[tx.data.transaction_id]);
                 }
                 if(isTxPresent == 2)
                 {
@@ -414,11 +415,15 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                 if (isTxPresent == 1)
                 {
                     cout << "[LOG] Transaction already exists in Tangle. Updating it." << endl;
-                    broadcastTransaction(tx);
+                    broadcastTransaction(tangle.transactions[newTx.data.transaction_id]);
                 }
                 else{
                     cout << "LOG] Transaction added to Tangle. Broadcasting." << endl;
-                    broadcastTransaction(tx);
+                    // perform PoW on the transaction
+                    performPoW(tx.data.transaction_id);
+
+                    tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
+                    broadcastTransaction(tangle.transactions[newTx.data.transaction_id]);
                 }
             }
             
