@@ -330,10 +330,10 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
             // single signed transaction
             else if (!newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
             {
-                cout << "[LOG] Transaction is only single signed. PoW not performed" << endl;
+                cout << "[LOG] Transaction is only single signed." << endl;
 
                 // TODO: if the transaction is only signed by sender,
-
+                // add transaction to Tangle but perform PoW later
                 string txSearialized = Tangle::serializeTransactionData(newTx);
                 string sig_b64 = newTx.metadata.signature1;
 
@@ -348,51 +348,40 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     cerr << "[ERROR] Transaction signature 1 verification failed for sender." << endl;
                     return;
                 }
+                int isTxPresent = tangle.addTransaction(newTx);
+                Transaction tx = tangle.transactions[newTx.data.transaction_id];
                 // check if the receiver is same as the host node.
-                const std::string uid = getenv("UID");
-                // If yes, that means this node (the host node) is the receiver and must doubly sign the transaction
-                if (newTx.data.receiver == uid) // If receiver is the host node
+                if(isTxPresent == 0)
                 {
-                    // verify tx data against own meter data -> not possible here in docknet
-                    cout << "[LOG] Transaction is for this node. Double signing it." << endl;
-                    // Sign the transaction with the receiver's signature
-                    newTx.metadata.signature2 = signTransaction(txSearialized);
-                    newTx.metadata.lastUpdated = time(nullptr);
-                    // perform PoW on the transaction
-                    performPoW(newTx.data.transaction_id, 2);
-                    newTx.metadata.cumulative_weight = 1; // Initialize cumulative weight
+                    cout << "[LOG] Transaction already exists in Tangle. No Updates. Not broadcasting." << endl;
+                    return;
                 }
-                else
+                if(isTxPresent == 1)
                 {
-                    cout << "[LOG] Transaction is not for this node. Not signing." << endl;
+                    cout << "[LOG] Transaction already exists in Tangle. Updating it." << endl;
+                    broadcastTransaction(tx);
                 }
+                if(isTxPresent == 2)
+                {
+                    cout << "[LOG] Transaction added to Tangle. Broadcasting." << endl;
 
-                // check if the tx is present in the Tangle
-                if (tangle.transactionPresent(newTx))
-                {
-                    cout << "[LOG] Transaction already present in Tangle." << endl;
+                    const std::string uid = getenv("UID");
+                    // If yes, that means this node (the host node) is the receiver and must doubly sign the transaction
+                    if (tx.data.receiver == uid) // If receiver is the host node
+                    {
+                        // verify tx data against own meter data -> not possible here in docknet
+                        cout << "[LOG] Transaction is for this node. Double signing it." << endl;
+                        // Sign the transaction with the receiver's signature
+                        tx.metadata.signature2 = signTransaction(txSearialized);
 
-                    if (!tangle.transactionNeedsUpdate(newTx))
-                    {
-                        cout << "[LOG] Transaction doesn't need to be updated." << endl;
-                        cout << "[LOG] Tx not BROADCASTED further" << endl;
-                        return;
+                        // perform PoW on the transaction
+                        performPoW(tx.data.transaction_id, 2);
+                                 
+                        tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
                     }
-                    else
-                    {
-                        cout << "[LOG] Transaction needs to be updated." << endl;
-                        tangle.updateTransaction(newTx);
-                        broadcastTransaction(newTx);
-                    }
-                }
-                else
-                {
-                    cout << "[LOG] Transaction not present in Tangle. Adding it." << endl;
-                    tangle.addTransaction(newTx);
-                    broadcastTransaction(newTx);
+                    broadcastTransaction(tangle.transactions[newTx.data.transaction_id]);
                 }
                 
-
                 
             }
             // double signed transaction
@@ -413,39 +402,24 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     cerr << "[ERROR] Transaction signature verification failed." << endl;
                     return;
                 }
-            
 
-                if (tangle.transactionPresent(newTx))
+                int isTxPresent = tangle.addTransaction(newTx);
+                Transaction tx = tangle.transactions[newTx.data.transaction_id];
+                // check if the receiver is same as the host node.
+                if (isTxPresent == 0)
                 {
-                    cout << "[LOG] Transaction already present in Tangle." << endl;
-
-                    if (!tangle.transactionNeedsUpdate(newTx))
-                    {
-                        cout << "[LOG] Transaction doesn't need to be updated." << endl;
-                        
-                    }
-                    else
-                    {
-                        cout << "[LOG] Transaction needs to be updated." << endl;
-                        tangle.updateTransaction(newTx);
-
-                        broadcastTransaction(newTx);
-                    }
+                    cout << "[LOG] Transaction already exists in Tangle. No Updates. Not broadcasting." << endl;
+                    return;
                 }
-                else
+                if (isTxPresent == 1)
                 {
-                    cout << "[LOG] Transaction not present in Tangle. Adding it." << endl;
-                    tangle.addTransaction(newTx);
-
-                    cout << "[LOG] Performing PoW on transaction: " << newTx.data.transaction_id << endl;
-
-                    performPoW(newTx.data.transaction_id, 2);
-                    tangle.updateCumulativeWeight(newTx.data.transaction_id); // Increase cumulative weight for new transaction
-
-                    Transaction updatedTx = tangle.transactions[newTx.data.transaction_id];
-                    broadcastTransaction(newTx);
+                    cout << "[LOG] Transaction already exists in Tangle. Updating it." << endl;
+                    broadcastTransaction(tx);
                 }
-
+                else{
+                    cout << "LOG] Transaction added to Tangle. Broadcasting." << endl;
+                    broadcastTransaction(tx);
+                }
             }
             
         }

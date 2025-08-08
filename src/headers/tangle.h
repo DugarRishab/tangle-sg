@@ -11,7 +11,7 @@ class Tangle
 {
 public:
     Transaction addNewTransaction(Transaction& tx);
-    void addTransaction(const Transaction& tx);
+    int addTransaction(const Transaction& tx, int update = 0);
     void updateCumulativeWeight(const std::string& transaction_id);
     std::string serialize(); // Converts the Tangle to a string format
     static std::string serializeTransaction(const Transaction& tx); // Serializes a single transaction

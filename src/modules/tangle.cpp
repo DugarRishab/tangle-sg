@@ -9,7 +9,6 @@
 #include <openssl/sha.h>
 #include <iomanip>
 
-
 using namespace std;
 
 std::mutex tangleMutex;
@@ -34,10 +33,10 @@ std::mutex tangleMutex;
 //     return calculatedChecksum == receivedChecksum;
 // }
 
-Transaction Tangle::addNewTransaction( Transaction &tx)
+Transaction Tangle::addNewTransaction(Transaction &tx)
 {
     // calculate checksum
-    
+
     // assing uid to the tra
     tx.data.transaction_id = to_string(tx.data.timestamp) + "_" + tx.data.sender + "_" + tx.data.receiver;
     string txData = serializeTransactionData(tx);
@@ -49,7 +48,7 @@ Transaction Tangle::addNewTransaction( Transaction &tx)
     // cummulative weight is not updated here. it is done after double signing
     tx.metadata.cumulative_weight = 0; // Initialize cumulative weight
 
-    //sign the transaction
+    // sign the transaction
     tx.metadata.signature1 = signTransaction(txData);
 
     // Lock the mutex to protect shared Tangle access
@@ -58,14 +57,29 @@ Transaction Tangle::addNewTransaction( Transaction &tx)
 
     return tx;
 }
-void Tangle::addTransaction(const Transaction &tx)
+int Tangle::addTransaction(const Transaction &tx, int update)
 {
     // Lock the mutex to protect shared Tangle access
     lock_guard<mutex> lock(tangleMutex);
     // TODO: check if tx already exists
+    auto it = transactions.find(tx.data.transaction_id);
+    if (it == transactions.end())
+    {
+        transactions[tx.data.transaction_id] = tx;
 
-
-    transactions[tx.data.transaction_id] = tx;
+        std::cout << "[LOG] Transaction added to Tangle: " << tx.data.transaction_id << endl;
+        return 2; // Transaction added
+    }
+    else if (update)
+    {
+        std::cout << "[LOG] Transaction already exists in Tangle. Updating it: " << tx.data.transaction_id << endl;
+        updateTransaction(tx);
+        return 1; // Transaction updated
+    }
+    else{
+        // dont even update. update = 0
+        return 0; // Transaction already exists, no update
+    }
 }
 void Tangle::updateCumulativeWeight(const std::string &transaction_id)
 {
@@ -76,7 +90,7 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id)
     transactions[transaction_id].metadata.cumulative_weight++;
     std::cout << "[LOG] Cumulative weight updated for transaction: "
               << ". New cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
-              
+
     transactions[transaction_id].metadata.lastUpdated = time(nullptr);
     // Update cumulative weight for all parents
     // TODO: make it recursive for each parent until genesis
@@ -87,7 +101,8 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id)
             transactions[parent].metadata.cumulative_weight++;
             transactions[parent].metadata.lastUpdated = time(nullptr);
         }
-        else{
+        else
+        {
             std::cerr << "[ERROR] Parent transaction " << parent << " not found in Tangle." << std::endl;
         }
     }
@@ -96,7 +111,6 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id)
 string Tangle::serializeTransactionData(const Transaction &tx)
 {
 
-    
     stringstream ss;
     ss << tx.data.transaction_id << ","
        << tx.data.timestamp << ","
@@ -116,7 +130,7 @@ string Tangle::serializeTransactionData(const Transaction &tx)
             ss << ",";
     }
     ss << "]";
-    
+
     return ss.str();
 }
 
@@ -136,7 +150,7 @@ string Tangle::serialize()
 
 string Tangle::serializeTransaction(const Transaction &tx)
 {
-    
+
     stringstream ss;
     ss << tx.data.transaction_id << ","
        << tx.data.timestamp << ","
@@ -161,7 +175,7 @@ string Tangle::serializeTransaction(const Transaction &tx)
             ss << ",";
     }
     ss << "]";
-    
+
     return ss.str();
 }
 
@@ -170,18 +184,18 @@ std::unordered_map<std::string, Transaction> Tangle::deserialize(const string &d
 {
     stringstream ss(data);
     string line;
-    
+
     string txString;
     std::unordered_map<std::string, Transaction> transactions;
 
     // split by semicolon
-    while (getline(ss, txString, ';')){
+    while (getline(ss, txString, ';'))
+    {
 
-       
-        Transaction tx = deserializeTransaction(txString);       
+        Transaction tx = deserializeTransaction(txString);
         transactions[tx.data.transaction_id] = tx;
     }
-    
+
     return transactions;
 }
 
@@ -205,7 +219,7 @@ Transaction Tangle::deserializeTransaction(const string &data)
 
     getline(ss, line, ',');
     tx.metadata.cumulative_weight = std::stoi(line);
-    
+
     getline(ss, line, ',');
     tx.metadata.lastUpdated = std::stoll(line);
 
@@ -217,7 +231,7 @@ Transaction Tangle::deserializeTransaction(const string &data)
     // Deserialize previous transactions
     string prevTxStr;
     getline(ss, prevTxStr);
-    
+
     // Remove brackets and split by semicolon
     prevTxStr = prevTxStr.substr(1, prevTxStr.size() - 2); // Remove brackets
     stringstream prevTxStream(prevTxStr);
@@ -247,7 +261,7 @@ void Tangle::updateFromSerialized(const string &data)
         getline(linestream, timestamp, ',');
         // Assuming timestamp is a UNIX timestamp string
         newTx.data.timestamp = std::stoll(timestamp);
-        
+
         getline(linestream, newTx.data.sender, ',');
         getline(linestream, newTx.data.receiver, ',');
 
@@ -262,9 +276,9 @@ void Tangle::updateFromSerialized(const string &data)
         string weight;
         getline(linestream, weight, ',');
         newTx.metadata.cumulative_weight = stoi(weight);
-        
+
         string lastUpdated;
-        getline(linestream, lastUpdated, ',');  
+        getline(linestream, lastUpdated, ',');
         newTx.metadata.lastUpdated = std::stoll(lastUpdated);
 
         getline(linestream, newTx.metadata.signature1, ',');
@@ -294,9 +308,10 @@ void Tangle::updateFromSerialized(const string &data)
 }
 
 // function to check if tx is already present in the tangle
-bool Tangle::transactionPresent(Transaction &tx){
+bool Tangle::transactionPresent(Transaction &tx)
+{
     lock_guard<mutex> lock(tangleMutex);
-    
+
     // Check if the transaction ID exists in the Tangle's transactions
     return transactions.find(tx.data.transaction_id) != transactions.end();
 }
@@ -304,12 +319,13 @@ bool Tangle::transactionPresent(Transaction &tx){
 bool Tangle::transactionNeedsUpdate(Transaction &tx)
 {
     lock_guard<mutex> lock(tangleMutex);
-    
+
     auto it = transactions.find(tx.data.transaction_id);
     if (it != transactions.end())
     {
 
-        if(!tx.metadata.signature2.empty() && it->second.metadata.signature2.empty()){
+        if (!tx.metadata.signature2.empty() && it->second.metadata.signature2.empty())
+        {
             // If the transaction is double signed, it needs to be updated
             return true;
         }
@@ -325,16 +341,20 @@ bool Tangle::transactionNeedsUpdate(Transaction &tx)
 }
 
 // Function to only update the metadata of a transaction in the Tangle
-void Tangle::updateTransaction(Transaction &tx){
+void Tangle::updateTransaction(Transaction &tx)
+{
     // only update cumulative weight and last updated time
     lock_guard<mutex> lock(tangleMutex);
     auto it = transactions.find(tx.data.transaction_id);
     if (it != transactions.end())
     {
-        it->second.metadata.cumulative_weight = tx.metadata.cumulative_weight;
-        it->second.metadata.lastUpdated = tx.metadata.lastUpdated;
+        if (it->second.metadata.lastUpdated < tx.metadata.lastUpdated)
+        {
+            it->second.metadata.cumulative_weight = tx.metadata.cumulative_weight;
+            it->second.metadata.lastUpdated = tx.metadata.lastUpdated;
+        }
 
-        if(!tx.metadata.signature2.empty())
+        if (!tx.metadata.signature2.empty())
             it->second.metadata.signature2 = tx.metadata.signature2;
     }
     else
@@ -342,5 +362,3 @@ void Tangle::updateTransaction(Transaction &tx){
         cerr << "[ERROR] Transaction not found in Tangle for update: " << tx.data.transaction_id << endl;
     }
 }
-
-
