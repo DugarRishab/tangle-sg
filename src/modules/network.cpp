@@ -375,7 +375,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                         tx.metadata.signature2 = signTransaction(txSearialized);
 
                         // perform PoW on the transaction
-                        performPoW(tx.data.transaction_id, 2);
+                        performPoW(tx.data.transaction_id);
                                  
                         tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
                     }

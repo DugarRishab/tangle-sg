@@ -15,8 +15,12 @@ std::string sha256(const std::string& input) {
     }
     return ss.str();
 }
-std::string performPoW(const std::string& data, int difficulty) {
+std::string performPoW(const std::string& data) {
+    int difficulty = 3; // Set the difficulty level
     std::cout << "Performing PoW for: " << data << std::endl;
+    // TODO: calculate time for POW
+
+
     int nonce = 0;
     const int MAX_ATTEMPTS = 1e8;  // Avoid infinite loops
     while (nonce < MAX_ATTEMPTS) {

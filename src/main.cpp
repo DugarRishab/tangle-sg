@@ -248,7 +248,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         
         auto start = chrono::high_resolution_clock::now();
         // Compute PoW for new transaction
-        performPoW(newTx.data.transaction_id, 2);
+        performPoW(newTx.data.transaction_id);
 
         // Add the new transaction
         Transaction finalTx = tangle.addNewTransaction(newTx);
