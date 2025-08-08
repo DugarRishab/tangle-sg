@@ -379,6 +379,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                         performPoW(tx.data.transaction_id);
                                  
                         tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
+                        tangle.updateTransaction(tx); // Update the transaction in Tangle
                     }
                     broadcastTransaction(tangle.transactions[newTx.data.transaction_id]);
                 }
@@ -423,6 +424,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     performPoW(tx.data.transaction_id);
 
                     tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
+                    tangle.updateTransaction(tx);
                     broadcastTransaction(tangle.transactions[newTx.data.transaction_id]);
                 }
             }
