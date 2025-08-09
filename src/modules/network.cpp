@@ -186,6 +186,18 @@ void Network::scheduleReconnect(Peer &peer)
         peer.retryCount++;
         peer.nextRetry = std::chrono::steady_clock::now() + std::chrono::seconds(2 * peer.retryCount);
         std::cout << "[LOG] Scheduling reconnect for peer " << peer.id << " in " << 2 * peer.retryCount << " seconds.\n";
+
+        std::this_thread::sleep_until(peer.nextRetry);
+
+        if (peer.state == ConnectionState::CLOSED || peer.state == ConnectionState::FAILED)
+        {
+            std::cout << "[LOG] Attempting to reconnect to peer " << peer.id << "...\n";
+            connectWebSocket(peer);
+        }
+        else
+        {
+            std::cout << "[LOG] Peer " << peer.id << " is already connected or in the process of connecting.\n";
+        }
     }
     else
     {
