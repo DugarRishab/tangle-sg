@@ -68,6 +68,8 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
                 std::this_thread::sleep_until(now + interval);
             }
         });
+
+    monitorThread.join();
 }
 
 void Network::initClient()
