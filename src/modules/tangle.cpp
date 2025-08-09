@@ -354,7 +354,7 @@ void Tangle::updateTransaction(Transaction &tx)
             it->second.metadata.lastUpdated = tx.metadata.lastUpdated;
         }
 
-        if (!tx.metadata.signature2.empty())
+        if (it->second.metadata.signature2.empty())
             it->second.metadata.signature2 = tx.metadata.signature2;
     }
     else
