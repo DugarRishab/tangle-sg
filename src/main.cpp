@@ -13,6 +13,7 @@
 #include "headers/network.h"
 #include "headers/peers2.h"
 #include "headers/utils.h"
+#include "headers/peerDiscovery.h"
 #include <fstream>
 #include <cstdlib> // getenv, setenv, rand
 #include <ctime>   // time_t, time()
