@@ -52,6 +52,7 @@ private:
 	std::thread monitorThread;
 
 	Tangle &tangle;
+	Peers &peers; // Reference to Peers object
 
 	void initClient();
 	void initServer();

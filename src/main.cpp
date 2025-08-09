@@ -215,9 +215,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         
         Transaction newTx;
 
-        auto peerList = peers.getPeerList();
-
-        if (peerList.empty())
+        if (peers.countPeers() == 0)
         {
             std::cout << "[WARN] Still no peers—waiting before generating transactions…\n";
             std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -226,13 +224,8 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         }
 
         vector<string> parents = selectTips(tangle, 2);
-        std::cout << "[LOG][SIMULATOR] Using Peer List ->" << std::endl;
-        for (const auto &peer : peerList)
-        {
-            std::cout << "Peer ID: " << peer.id << ", Address: " << peer.address << ", Port: " << peer.port << std::endl;
-        }
         // receiver is selected randomly from the list of active peers
-        string receiver = peerList[rand() % peers.getPeerList().size()].id;                                                                                                                                    
+        string receiver = peers.getRandomPeer().id;                                                                                                                                    
         
         newTx.data.timestamp = time(nullptr);
         newTx.data.timestampInt = static_cast<int>(time(nullptr));
@@ -399,25 +392,13 @@ int main()
         std::cout << "Exported PK_b64, SK_b64, and UID to environment.\n";
     }
 
-    // try
-    // {
-    //     std::string secret = loadOrCreateHMACSecret(HMAC_SECRET_FILE);
-    //     // Now getenv("HMAC_SECRET") will return this hex string.
-    // }
-    // catch (const std::exception &ex)
-    // {
-    //     std::cerr << "[FATAL] " << ex.what() << "\n";
-    //     return 1;
-    // }
-
-    // TODO FOR DOCKNET: using a standard Ed25519 tool
-    // ed25519 - keygen
-    // -- output - public node_X.pub -> 32bit public key
-    // -- output - private node_X.key -> 64bit private key
-
-    // then -> UID = Base58(PublicKey)
-
     Tangle tangle;
+
+    Peers peers;
+
+    Network net(9000, tangle, peers); // 9000 is for WS, 9001 is for UDP
+
+    PeerDiscovery pd(9001, net); // 9001 is for UDP discovery
 
     // Create genesis transaction (without PoW initially)
 
@@ -446,15 +427,12 @@ int main()
         tangle.addTransaction(genesis);
     }
 
-    Network net(9000, tangle);
-
-    Peers pd(9001, tangle, net); // 9000 is for WS, 9001 is for UDP
     // THREAD 1: WS server
     auto serverWrapper = [&]()
     {
         try
         {
-            pd.findPeers(5); // Discover up to 5 peers
+            pd.start();
         }
         catch (std::exception &ex)
         {
@@ -471,7 +449,7 @@ int main()
         try
         {
             std::cout << "[THREAD] simulateSmartMeter() beginning…\n";
-            simulateSmartMeter(tangle, pd, net); // your existing function
+            simulateSmartMeter(tangle, peers, net); // your existing function
             std::cout << "[THREAD] simulateSmartMeter() returned!\n";
         }
         catch (const std::exception &ex)

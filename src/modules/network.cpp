@@ -31,7 +31,7 @@ using ConnectionHdl = websocketpp::connection_hdl;
 using MessagePtr = websocketpp::config::asio_client::message_type::ptr;
 using WsServer = websocketpp::server<websocketpp::config::asio>;
 
-Network::Network(uint16_t ws_port, Tangle &tangle) : ws_port(ws_port), tangle(tangle)
+Network::Network(uint16_t ws_port, Tangle &tangle, Peers &peers) : ws_port(ws_port), tangle(tangle), peers(peers)
 {
     initServer();
     initClient();
@@ -69,7 +69,7 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
             }
         });
 
-    monitorThread.join();
+    monitorThread.detach();
 }
 
 void Network::initClient()
@@ -92,7 +92,14 @@ void Network::initClient()
         [this](ConnectionHdl hdl)
         {
             auto con = client->get_con_from_hdl(hdl);
-            auto &p = activePeers[con->get_uri()->str()];
+            if (!con || !con->get_uri())
+            {
+                std::cout << "[WARN] Connection handle has no URI (early failure). Skipping.\n";
+                return;
+            }
+            std::string uri = con->get_uri()->str();
+            Peer p = peers.getPeer(uri);
+
             p.client_hdl = hdl;
             p.state = ConnectionState::OPEN;
             p.retryCount = 0;
@@ -107,6 +114,7 @@ void Network::initClient()
                 client->send(hdl, qm.payload, qm.opcode);
                 std::cout << "[LOG] Sent queued message to peer " << p.id << ": " << qm.payload << "\n";
                 p.outgoingQueue.pop_front();
+                peers.updatePeer(p);
             }
         });
 
@@ -114,7 +122,13 @@ void Network::initClient()
         [this](ConnectionHdl hdl, WsClient::message_ptr msg)
         {
             auto con = client->get_con_from_hdl(hdl);
-            auto &p = activePeers[con->get_uri()->str()];
+            if (!con || !con->get_uri())
+            {
+                std::cout << "[WARN] Connection handle has no URI (early failure). Skipping.\n";
+                return;
+            }
+            std::string uri = con->get_uri()->str();
+            Peer p = peers.getPeer(uri);
             std::cout << "[LOG] PACKET FROM URI: " << con->get_uri()->str() << "\n";
             std::cout << "[LOG] Received message from peer " << p.id << " at " << p.address << " : " << p.port << "\n";
             handleIncomingMessage(p, msg->get_payload());
@@ -124,8 +138,20 @@ void Network::initClient()
     client->set_fail_handler(
         [this](ConnectionHdl h)
         {
-            auto con = client->get_con_from_hdl(h);
-            auto &p = activePeers[con->get_uri()->str()];
+            auto con = client->get_con_from_hdl(hdl);
+            if (!con || !con->get_uri())
+            {
+                std::cout << "[WARN] Connection handle has no URI (early failure). Skipping.\n";
+                return;
+            }
+            std::string uri = con->get_uri()->str();
+            auto it = activePeers.find(uri);
+            if (it == activePeers.end())
+            {
+                std::cout << "[WARN] Unknown peer for URI " << uri << ". Skipping reconnect.\n";
+                return;
+            }
+            auto &p = it->second;
             std::cout << "[ERROR] WebSocket connection failed with peer " << p.id << " at " << p.address << " : " << p.port << "\n";
             p.state = ConnectionState::FAILED;
             scheduleReconnect(p);
@@ -135,8 +161,20 @@ void Network::initClient()
     client->set_close_handler(
         [this](ConnectionHdl h)
         {
-            auto con = client->get_con_from_hdl(h);
-            auto &p = activePeers[con->get_uri()->str()];
+            auto con = client->get_con_from_hdl(hdl);
+            if (!con || !con->get_uri())
+            {
+                std::cout << "[WARN] Connection handle has no URI (early failure). Skipping.\n";
+                return;
+            }
+            std::string uri = con->get_uri()->str();
+            auto it = activePeers.find(uri);
+            if (it == activePeers.end())
+            {
+                std::cout << "[WARN] Unknown peer for URI " << uri << ". Skipping reconnect.\n";
+                return;
+            }
+            auto &p = it->second;
             std::cout << "[LOG] WebSocket connection closed with peer " << p.id << " at " << p.address << " : " << p.port << "\n";
             p.state = ConnectionState::CLOSED;
             scheduleReconnect(p);
@@ -181,29 +219,18 @@ void Network::initServer()
 
 void Network::scheduleReconnect(Peer &peer)
 {
-    if (peer.retryCount < 5) // Limit retries to avoid infinite loop
+    if (peer.retryCount < 3) // Limit retries to avoid infinite loop
     {
         peer.retryCount++;
         peer.nextRetry = std::chrono::steady_clock::now() + std::chrono::seconds(2 * peer.retryCount);
         std::cout << "[LOG] Scheduling reconnect for peer " << peer.id << " in " << 2 * peer.retryCount << " seconds.\n";
-
-        std::this_thread::sleep_until(peer.nextRetry);
-
-        if (peer.state == ConnectionState::CLOSED || peer.state == ConnectionState::FAILED)
-        {
-            std::cout << "[LOG] Attempting to reconnect to peer " << peer.id << "...\n";
-            connectWebSocket(peer);
-        }
-        else
-        {
-            std::cout << "[LOG] Peer " << peer.id << " is already connected or in the process of connecting.\n";
-        }
     }
     else
     {
         std::cout << "[ERROR] Max retry limit reached for peer " << peer.id << ". Giving up.\n";
         peer.state = ConnectionState::FAILED;
     }
+    peers.updatePeer(peer);
 }
 // Computes SHA-256 checksum of the data
 string Network::computeChecksum(const string &data)

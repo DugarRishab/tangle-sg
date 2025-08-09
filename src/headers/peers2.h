@@ -66,71 +66,28 @@ struct Peer
 	std::chrono::steady_clock::time_point nextRetry;
 };
 
-// TODO: Use a set for unique peers only
-extern std::unordered_map<std::string, Peer> activePeers; // Global store for active WebSocket connections
+
 
 // Manages peers, discovery, HMAC-based handshake, and outgoing queue
 class Peers
 {
 public:
-	Peers(int port, Tangle &tangle, Network &net);
+	Peers();
 	~Peers();
 
-	
-	const std::vector<Peer> &getPeerList() const;
-
-	void findPeers(int maxPeers = 5, int maxTimeLimitMs = 10000); // Discover peers with a timeout
-
+	int addPeer(Peer &peer);
+	int removePeer(const std::string &uri);
+	int updatePeer(Peer &peer);
+	Peer getPeer(std::string uri);
+	int countPeers();
+	int updatePeerState(const std::string &uri, ConnectionState newState);
+	const std::unordered_map<std::string, Peer> getPeerList();
+	Peer getRandomPeer();
 
 private:
-	std::vector<Peer> peers_;
-
-	mutable std::mutex queueMutex_, peersMutex_;
-
-	std::string baseIP, broadcastIP;
-
-	int sock;
-	int port_;
-	std::string secretK_; // HMAC secret
-
-	int ws_port;
-
-	bool running_;
-	uint64_t NONCE_A; // Nonce for handshake
-	std::string UID_A; // Unique identifier for this node
-
-	Tangle &tangle; // Reference to the Tangle object
-	Network &net; // Reference to the Network object
-
-	std::vector<Peer> foundPeers_;
-	std::mutex foundMutex_;
-	std::condition_variable foundCv_;
-
-	// TODO: using a standard Ed25519 tool
-	// ed25519 - keygen
-	// -- output - public node_X.pub -> 32bit public key
-	// -- output - private node_X.key -> 64bit private key
-
-	// then -> UID = Base58(PublicKey)
-
-	// Utility
-	void addPeer(const Peer &peer);
-
-	uint64_t generateNonce();
-	std::string computeHMAC(const std::string &data);
-	void sendUDPPacket(const std::string &data, const sockaddr_in &addr);
-
-	// Discovery
-	void sendUDPBroadcast(const std::string &data);
-	// std::vector<Peer> listenDiscovery(int maxPeers, int maxTimeLimitMs);
-
-	// Handshake phases
-	bool performHandshake(Peer p);
-	void responderLoop();
-	bool verifyHMAC(const Json::Value &msg);
-
-	
-	std::thread responderThread_;
+	// std::vector<Peer> peers_;
+	std::unordered_map<std::string, Peer> peers_;
+	mutable std::mutex peersMutex_;
 	
 };
 
