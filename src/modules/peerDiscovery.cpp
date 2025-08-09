@@ -22,7 +22,7 @@
 
 using namespace std;
 
-PeerDiscovery::PeerDiscovery(int port, Network &net) : port_(port), running_(true), ws_port(9000), net(net)
+PeerDiscovery::PeerDiscovery(int port, Network &net, Peers &peers) : port_(port), running_(true), ws_port(9000), net(net), peers(peers)
 {
 	// Load HMAC secret
 	char *env = std::getenv("HMAC_SECRET");

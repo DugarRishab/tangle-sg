@@ -32,9 +32,9 @@ using namespace std;
 class PeerDiscovery
 {
 	public:
-		PeerDiscovery(int port, Network &net);
+		PeerDiscovery(int port, Network &net, Peers &peers);
 		~PeerDiscovery();
-		
+
 		void findPeers(int maxPeers = 5, int maxTimeLimitMs = 10000); // Discover peers with a timeout
 		void responderLoop();
 		void start();

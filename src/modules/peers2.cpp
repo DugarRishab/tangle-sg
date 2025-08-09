@@ -40,7 +40,7 @@ int Peers::addPeer(Peer &peer)
 	}
 	
 	peers_.emplace(peer.uri, peer); // Use ID as key for quick access
-	std::cout << "[LOG][ADD] Peer added: " << peer.id << " at " << peer.address << ":" << peer.port << "\n";
+	std::cout << "[LOG][ADD] Peer added: " << peer.id << " at " << peer.uri << "\n";
 	std::cout << "[LOG][ADD] Total connected Peers: " << peers_.size() << "\n";
 	return 1;						// Peer added successfully
 }

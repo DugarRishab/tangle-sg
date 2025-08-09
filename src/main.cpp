@@ -399,7 +399,7 @@ int main()
 
     Network net(9000, tangle, peers); // 9000 is for WS, 9001 is for UDP
 
-    PeerDiscovery pd(9001, net); // 9001 is for UDP discovery
+    PeerDiscovery pd(9001, net, peers); // 9001 is for UDP discovery
 
     // Create genesis transaction (without PoW initially)
 
