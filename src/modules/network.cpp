@@ -35,6 +35,7 @@ Network::Network(uint16_t ws_port, Tangle &tangle, Peers &peers) : ws_port(ws_po
 {
     initServer();
     initClient();
+    startPeerMonitor(std::chrono::seconds(30));
 }
 
 Network::~Network()
@@ -49,11 +50,11 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
             while (true)
             {
                 std::cout << "[MONITOR] Checking active peers...\n";
-                std::cout << "[MONITOR] Active peers count: " << activePeers.size() << "\n";
+                std::cout << "[MONITOR] Active peers count: " << peers.countPeers() << "\n";
                 
                 auto now = std::chrono::steady_clock::now();
 
-                for (auto &[uri, peer] : activePeers)
+                for (auto &[uri, peer] : peers.getPeerList())
                 {
                     // if not already open or in the process of connecting
                     if (peer.state != ConnectionState::OPEN &&
@@ -129,6 +130,7 @@ void Network::initClient()
             }
             std::string uri = con->get_uri()->str();
             Peer p = peers.getPeer(uri);
+
             std::cout << "[LOG] PACKET FROM URI: " << con->get_uri()->str() << "\n";
             std::cout << "[LOG] Received message from peer " << p.id << " at " << p.address << " : " << p.port << "\n";
             handleIncomingMessage(p, msg->get_payload());
@@ -145,13 +147,7 @@ void Network::initClient()
                 return;
             }
             std::string uri = con->get_uri()->str();
-            auto it = activePeers.find(uri);
-            if (it == activePeers.end())
-            {
-                std::cout << "[WARN] Unknown peer for URI " << uri << ". Skipping reconnect.\n";
-                return;
-            }
-            auto &p = it->second;
+            Peer p = peers.getPeer(uri);
             std::cout << "[ERROR] WebSocket connection failed with peer " << p.id << " at " << p.address << " : " << p.port << "\n";
             p.state = ConnectionState::FAILED;
             scheduleReconnect(p);
@@ -168,13 +164,7 @@ void Network::initClient()
                 return;
             }
             std::string uri = con->get_uri()->str();
-            auto it = activePeers.find(uri);
-            if (it == activePeers.end())
-            {
-                std::cout << "[WARN] Unknown peer for URI " << uri << ". Skipping reconnect.\n";
-                return;
-            }
-            auto &p = it->second;
+            Peer p = peers.getPeer(uri);
             std::cout << "[LOG] WebSocket connection closed with peer " << p.id << " at " << p.address << " : " << p.port << "\n";
             p.state = ConnectionState::CLOSED;
             scheduleReconnect(p);
@@ -194,7 +184,13 @@ void Network::initServer()
         [this](ConnectionHdl hdl)
         {
             auto con = server->get_con_from_hdl(hdl);
-            auto &p = activePeers[con->get_uri()->str()];
+            if (!con || !con->get_uri())
+            {
+                std::cout << "[WARN] Connection handle has no URI (early failure). Skipping.\n";
+                return;
+            }
+            std::string uri = con->get_uri()->str();
+            Peer p = peers.getPeer(uri);
 
             std::cout << "[LOG] New WebSocket connection from peer" << p.id << " at " << p.address << " : " << p.port << "\n";
             // new connection opened
@@ -204,7 +200,13 @@ void Network::initServer()
         [this](ConnectionHdl hdl, WsServer::message_ptr msg)
         {
             auto con = client->get_con_from_hdl(hdl);
-            auto &p = activePeers[con->get_uri()->str()];
+            if (!con || !con->get_uri())
+            {
+                std::cout << "[WARN] Connection handle has no URI (early failure). Skipping.\n";
+                return;
+            }
+            std::string uri = con->get_uri()->str();
+            Peer p = peers.getPeer(uri);
 
             std::cout << "[LOG] Received message from peer " << p.id << " at " << p.address << " : " << p.port << "\n";
 
@@ -549,7 +551,9 @@ void Network::connectWebSocket(Peer &peer)
     auto con = client->get_connection(uri, ec);
     if (ec)
     {
-        peer.state = ConnectionState::FAILED;
+        peers.updatePeerState(peer.uri, ConnectionState::FAILED);
+        
+
         std::cerr << "[ERROR] Websocket connection NOT established with peer "
                   << peer.id << " at " << peer.address << " : " << peer.port << ". Reason: " << ec.message() << '\n';
         throw std::runtime_error(ec.message());
@@ -557,16 +561,19 @@ void Network::connectWebSocket(Peer &peer)
 
     // Save outbound handle
     peer.client_hdl = con->get_handle();
+    
 
     try
     {
         peer.state = ConnectionState::CONNECTING;
+        peers.updatePeer(peer);
         client->connect(con);
         std::cout << "Websocket connected to peer: " << peer.id << " at " << peer.address << ":" << peer.port << "\n";
     }
     catch (const std::exception &e)
     {
         peer.state = ConnectionState::FAILED;
+        peers.updatePeer(peer);
         std::cerr << "[ERROR] Websocket connection NOT established with peer"
                   << peer.id << " at " << peer.address << " : " << peer.port << ". Reason: " << e.what() << '\n';
     }
@@ -575,7 +582,7 @@ void Network::connectWebSocket(Peer &peer)
 // General function to send a message to all active peers. Input - Message and Message Type
 void Network::broadcastMessage(const string &message, const string &messageType)
 {
-    for (auto &item : activePeers)
+    for (auto &item : peers.getPeerList())
     {
         // Construct the message with type prefix
         string fullMessage = messageType + "::TYPE::" + message;
