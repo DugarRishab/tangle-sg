@@ -289,8 +289,10 @@ void PeerDiscovery::responderLoop()
 					d3 << A_UID << B_UID << N2;
 					if (computeHMAC(d3.str()) == tag3)
 					{
+						
+						Peer p{A_UID, inet_ntoa(sender.sin_addr), (int)port_};
 						auto uri = "ws://" + p.address + ":" + std::to_string(ws_port);
-						Peer p{A_UID, inet_ntoa(sender.sin_addr), (int)port_, uri};
+						p.uri = uri;
 						net.connectWebSocket(p);
 
 						if (peers.addPeer(p) == 0)

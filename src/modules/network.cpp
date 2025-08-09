@@ -552,7 +552,7 @@ void Network::connectWebSocket(Peer &peer)
     if (ec)
     {
         peers.updatePeerState(peer.uri, ConnectionState::FAILED);
-        
+        peer.state = ConnectionState::FAILED;
 
         std::cerr << "[ERROR] Websocket connection NOT established with peer "
                   << peer.id << " at " << peer.address << " : " << peer.port << ". Reason: " << ec.message() << '\n';
