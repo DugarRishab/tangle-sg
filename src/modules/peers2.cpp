@@ -72,7 +72,7 @@ int Peers::updatePeer(Peer &peer)
 	return 0; // Peer not found
 }
 
-std::optional<Peer> Peers::getPeer(std::string uri)
+Peer Peers::getPeer(std::string uri)
 {
 	std::lock_guard<std::mutex> lock(peersMutex_);
 	auto it = peers_.find(uri);
@@ -82,7 +82,7 @@ std::optional<Peer> Peers::getPeer(std::string uri)
 	}
 
 	std::cerr << "[WARN] Peer with ID " << uri << " not found.\n";
-	return std::nullopt; // Peer not found
+	return Peer{}; // Peer not found
 }
 
 int Peers::countPeers()
