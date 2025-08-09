@@ -291,7 +291,7 @@ void PeerDiscovery::responderLoop()
 					{
 						
 						Peer p{A_UID, inet_ntoa(sender.sin_addr), (int)port_};
-						auto uri = "ws://" + p.address + ":" + std::to_string(ws_port);
+						auto uri = "ws://" + p.address + ":" + std::to_string(ws_port) + "/";
 						p.uri = uri;
 						net.connectWebSocket(p);
 
@@ -318,7 +318,7 @@ void PeerDiscovery::responderLoop()
 					p.address = inet_ntoa(sender.sin_addr);
 					p.port = msg.isMember("port") ? msg["port"].asInt() : 0;
 					p.nonce = msg["nonce_B"].asUInt64();
-					p.uri = "ws://" + p.address + ":" + std::to_string(ws_port);
+					p.uri = "ws://" + p.address + ":" + std::to_string(ws_port) + "/";
 
 					std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
 

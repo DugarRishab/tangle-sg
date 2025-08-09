@@ -35,7 +35,7 @@ int Peers::addPeer(Peer &peer)
 	auto it = peers_.find(peer.uri);
 	if (it != peers_.end())
 	{
-		std::cerr << "[WARN] Peer with URI " << peer.uri << " already exists. Skipping.\n";
+		std::cerr << "[WARN][ADD] Peer with URI " << peer.uri << " already exists. Skipping.\n";
 		return 0; // Peer already exists
 	}
 	
@@ -53,7 +53,7 @@ int Peers::removePeer(const std::string &uri)
 		return 1; // Peer removed successfully
 	}
 
-	std::cerr << "[WARN] Peer with ID " << uri << " not found.\n";
+	std::cerr << "[WARN][REMOVE] Peer with ID " << uri << " not found.\n";
 	return 0; // Peer not found
 }
 
@@ -68,7 +68,7 @@ int Peers::updatePeer(Peer &peer)
 		return 1;		   // Peer updated successfully
 	}
 
-	std::cerr << "[WARN] Peer with ID " << peer.uri << " not found.\n";
+	std::cerr << "[WARN][UPDATE] Peer with ID " << peer.uri << " not found.\n";
 	return 0; // Peer not found
 }
 
@@ -81,7 +81,7 @@ Peer Peers::getPeer(std::string uri)
 		return it->second; // Return the found peer
 	}
 
-	std::cerr << "[WARN] Peer with ID " << uri << " not found.\n";
+	std::cerr << "[WARN][GET] Peer with ID " << uri << " not found.\n";
 	return Peer{}; // Peer not found
 }
 
@@ -101,7 +101,7 @@ int Peers::updatePeerState(const std::string &uri, ConnectionState newState)
 		return 1;					 // State updated successfully
 	}
 
-	std::cerr << "[WARN] Peer with ID " << uri << " not found.\n";
+	std::cerr << "[WARN][UPDATE_STATE] Peer with ID " << uri << " not found.\n";
 	return 0; // Peer not found
 }
 

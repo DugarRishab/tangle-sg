@@ -547,7 +547,7 @@ void Network::connectWebSocket(Peer &peer)
 
     websocketpp::lib::error_code ec;
     auto uri = "ws://" + peer.address + ":" + std::to_string(ws_port);
-    peer.uri = uri;
+    
     auto con = client->get_connection(uri, ec);
     if (ec)
     {
