@@ -348,7 +348,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     cerr << "[ERROR] Transaction signature 1 verification failed for sender." << endl;
                     return;
                 }
-                int isTxPresent = tangle.addTransaction(newTx);
+                int isTxPresent = tangle.addTransaction(newTx, 1);
                 Transaction tx = tangle.transactions[newTx.data.transaction_id];
                 // check if the receiver is same as the host node.
                 if(isTxPresent == 0)
@@ -374,9 +374,9 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                         cout << "[LOG] Transaction is for this node. Double signing it." << endl;
                         // Sign the transaction with the receiver's signature
                         tx.metadata.signature2 = signTransaction(txSearialized);
-
                         // perform PoW on the transaction
                         performPoW(tx.data.transaction_id);
+                        tx.metadata.lastUpdated = std::time(nullptr);
                         tangle.updateTransaction(tx);
                         tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
                          // Update the transaction in Tangle
@@ -405,7 +405,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     return;
                 }
 
-                int isTxPresent = tangle.addTransaction(newTx);
+                int isTxPresent = tangle.addTransaction(newTx, 1);
                 Transaction tx = tangle.transactions[newTx.data.transaction_id];
                 // check if the receiver is same as the host node.
                 if (isTxPresent == 0)
@@ -422,9 +422,9 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     cout << "LOG] Transaction added to Tangle. Broadcasting." << endl;
                     // perform PoW on the transaction
                     performPoW(tx.data.transaction_id);
-
+                    
                     tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
-                    tangle.updateTransaction(tx);
+                    
                     broadcastTransaction(tangle.transactions[newTx.data.transaction_id]);
                 }
             }
@@ -472,7 +472,6 @@ void Network::broadcastTransaction(const Transaction &Tx)
     string jsonString = Json::writeString(writer, jsonData);
     // cout << "[LOG] Transaction JSON: " << jsonString << endl;
     broadcastMessage(jsonString, "NEWTX");
-    cout << "[LOG][NEWTX] Broadcasted new transaction to peers." << endl;
 }
 
 void Network::sendTangle(Peer &peer)

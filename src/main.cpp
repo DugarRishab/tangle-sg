@@ -221,6 +221,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         {
             std::cout << "[WARN] Still no peers—waiting before generating transactions…\n";
             std::this_thread::sleep_for(std::chrono::seconds(5));
+            i--;
             continue; // skip this iteration until we have at least one
         }
 
@@ -253,13 +254,13 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // Add the new transaction
         Transaction finalTx = tangle.addNewTransaction(newTx);
 
-        cout << "[LOG] Generating new transaction: " << finalTx.data.transaction_id << " at:" << finalTx.data.timestamp << endl;
+        cout << "[LOG][SIMULATOR] Generating new transaction: " << finalTx.data.transaction_id << " at:" << finalTx.data.timestamp << endl;
 
         auto end = chrono::high_resolution_clock::now();
         auto elapsed = duration<double, milli>(end - start).count();
 
-        cout << "[LOG] Transaction " << finalTx.data.transaction_id << " added to Tangle." << endl;
-        cout << "Time elapsed:" << elapsed << " ms" << endl;
+        cout << "[LOG][SIMULATOR] Transaction " << finalTx.data.transaction_id << " added to Tangle." << endl;
+        cout << "[LOG][SIMULATOR] Time elapsed:" << elapsed << " ms" << endl;
 
         auto finalDataSerialized = Tangle::serializeTransaction(finalTx);
         auto finalDataDeSerialized = Tangle::deserializeTransaction(finalDataSerialized); 
@@ -270,10 +271,11 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // testSignaturePipeline(finalTx);
 
         net.broadcastTransaction(finalTx);
-        this_thread::sleep_for(chrono::seconds(10));
+        this_thread::sleep_for(chrono::seconds(60));
     }
 
     saveTangleToCSV(tangle.transactions, "tangle_state.csv");
+    std::this_thread::sleep_for(std::chrono::seconds(60));
 
     throw std::runtime_error("[LOG] Tangle state saved to tangle_state.txt. Exiting simulation.");
 }
@@ -461,7 +463,7 @@ int main()
         }
     };
 
-    net.startPeerMonitor(std::chrono::seconds(30)); // Start peer monitor thread
+    net.startPeerMonitor(std::chrono::seconds(10)); // Start peer monitor thread
 
     // THREAD 2: Simulation loop
     auto simWrapper = [&]()

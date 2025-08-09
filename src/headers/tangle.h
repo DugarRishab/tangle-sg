@@ -22,7 +22,7 @@ public:
     std::unordered_map<std::string, Transaction> transactions;
     bool transactionPresent( Transaction& tx);
     bool transactionNeedsUpdate(Transaction &tx);
-    void updateTransaction(Transaction &tx);
+    int updateTransaction(Transaction &tx);
 
 private:
     std::mutex tangleMutex; // Mutex to protect shared Tangle access
