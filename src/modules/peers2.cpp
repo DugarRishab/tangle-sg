@@ -38,7 +38,7 @@ int Peers::addPeer(Peer &peer)
 		std::cerr << "[WARN] Peer with URI " << peer.uri << " already exists. Skipping.\n";
 		return 0; // Peer already exists
 	}
-	peers_.push_back(peer);
+	
 	peers_.emplace(peer.uri, peer); // Use ID as key for quick access
 	return 1;						// Peer added successfully
 }
@@ -68,7 +68,7 @@ int Peers::updatePeer(Peer &peer)
 		return 1;		   // Peer updated successfully
 	}
 
-	std::cerr << "[WARN] Peer with ID " << uri << " not found.\n";
+	std::cerr << "[WARN] Peer with ID " << peer.uri << " not found.\n";
 	return 0; // Peer not found
 }
 
