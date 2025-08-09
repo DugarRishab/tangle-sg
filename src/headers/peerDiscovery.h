@@ -20,6 +20,7 @@
 
 #include "tangle.h"
 #include "peers2.h"
+#include "network.h"
 
 #include <thread>
 #include <cstdint>
@@ -31,6 +32,9 @@ using namespace std;
 class PeerDiscovery
 {
 	public:
+		PeerDiscovery(int port, Network &net);
+		~PeerDiscovery();
+		
 		void findPeers(int maxPeers = 5, int maxTimeLimitMs = 10000); // Discover peers with a timeout
 		void responderLoop();
 		void start();
@@ -68,5 +72,5 @@ class PeerDiscovery
 		bool performHandshake(Peer p);
 
 		bool verifyHMAC(const Json::Value &msg);
-}
+};
 #endif // PEERDISCOVERY_H
