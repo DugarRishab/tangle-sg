@@ -138,7 +138,7 @@ void Network::initClient()
 
     // on fail (handshake/transport error)
     client->set_fail_handler(
-        [this](ConnectionHdl h)
+        [this](ConnectionHdl hdl)
         {
             auto con = client->get_con_from_hdl(hdl);
             if (!con || !con->get_uri())
@@ -155,7 +155,7 @@ void Network::initClient()
 
     // on close
     client->set_close_handler(
-        [this](ConnectionHdl h)
+        [this](ConnectionHdl hdl)
         {
             auto con = client->get_con_from_hdl(hdl);
             if (!con || !con->get_uri())

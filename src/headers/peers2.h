@@ -81,7 +81,7 @@ public:
 	Peer getPeer(std::string uri);
 	int countPeers();
 	int updatePeerState(const std::string &uri, ConnectionState newState);
-	const std::unordered_map<std::string, Peer> getPeerList();
+	std::unordered_map<std::string, Peer> getPeerList();
 	Peer getRandomPeer();
 
 private:
