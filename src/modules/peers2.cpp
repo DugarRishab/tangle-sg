@@ -21,21 +21,15 @@
 
 using namespace std;
 
-
-
 Peers::Peers()
 {
-
-	
-
 }
 
 Peers::~Peers()
 {
-	
 }
 
-int Peers::addPeer( Peer &peer)
+int Peers::addPeer(Peer &peer)
 {
 	std::lock_guard<std::mutex> lock(peersMutex_);
 	auto it = peers_.find(peer.uri);
@@ -46,7 +40,7 @@ int Peers::addPeer( Peer &peer)
 	}
 	peers_.push_back(peer);
 	peers_.emplace(peer.uri, peer); // Use ID as key for quick access
-	return 1; // Peer added successfully
+	return 1;						// Peer added successfully
 }
 
 int Peers::removePeer(const std::string &uri)
@@ -58,41 +52,37 @@ int Peers::removePeer(const std::string &uri)
 		peers_.erase(it);
 		return 1; // Peer removed successfully
 	}
-	else
-	{
-		std::cerr << "[WARN] Peer with ID " << uri << " not found.\n";
-		return 0; // Peer not found
-	}
+
+	std::cerr << "[WARN] Peer with ID " << uri << " not found.\n";
+	return 0; // Peer not found
 }
 
-int Peers::updatePeer( Peer &peer){
+int Peers::updatePeer(Peer &peer)
+{
 
 	std::lock_guard<std::mutex> lock(peersMutex_);
-	auto it = peers_.find(uri);
+	auto it = peers_.find(peer.uri);
 	if (it != peers_.end())
 	{
 		it->second = peer; // Update the existing peer
-		return 1; // Peer updated successfully
+		return 1;		   // Peer updated successfully
 	}
-	else
-	{
-		std::cerr << "[WARN] Peer with ID " << uri << " not found.\n";
-		return 0; // Peer not found
-	}
+
+	std::cerr << "[WARN] Peer with ID " << uri << " not found.\n";
+	return 0; // Peer not found
 }
 
-Peer Peers::getPeer(std::string uri){
+std::optional<Peer> Peers::getPeer(std::string uri)
+{
 	std::lock_guard<std::mutex> lock(peersMutex_);
 	auto it = peers_.find(uri);
 	if (it != peers_.end())
 	{
 		return it->second; // Return the found peer
 	}
-	else
-	{
-		std::cerr << "[WARN] Peer with ID " << uri << " not found.\n";
-		return; // Peer not found
-	}
+
+	std::cerr << "[WARN] Peer with ID " << uri << " not found.\n";
+	return std::nullopt; // Peer not found
 }
 
 int Peers::countPeers()
@@ -108,16 +98,14 @@ int Peers::updatePeerState(const std::string &uri, ConnectionState newState)
 	if (it != peers_.end())
 	{
 		it->second.state = newState; // Update the state of the peer
-		return 1; // State updated successfully
+		return 1;					 // State updated successfully
 	}
-	else
-	{
-		std::cerr << "[WARN] Peer with ID " << uri << " not found.\n";
-		return 0; // Peer not found
-	}
+
+	std::cerr << "[WARN] Peer with ID " << uri << " not found.\n";
+	return 0; // Peer not found
 }
 
-const std::unordered_map<std::string, Peer> Peers::getPeerList() 
+std::unordered_map<std::string, Peer> Peers::getPeerList()
 {
 	std::lock_guard<std::mutex> lock(peersMutex_);
 	return peers_;
@@ -125,7 +113,7 @@ const std::unordered_map<std::string, Peer> Peers::getPeerList()
 
 Peer Peers::getRandomPeer()
 {
-	std::lock_guard<std::mutex> lock(mutex_);
+	std::lock_guard<std::mutex> lock(peersMutex_);
 
 	if (peers_.empty())
 	{
