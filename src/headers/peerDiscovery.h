@@ -41,7 +41,7 @@ class PeerDiscovery
 		void Stop();
 
 	private:
-		Peers peers;
+		Peers &peers;
 		mutable std::mutex peersMutex_;
 
 		Network &net; // Reference to the Network object
