@@ -270,8 +270,9 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         this_thread::sleep_for(chrono::seconds(30));
     }
 
-    saveTangleToCSV(tangle.transactions, "tangle_state.csv");
+    
     std::this_thread::sleep_for(std::chrono::seconds(300));
+    saveTangleToCSV(tangle.transactions, "tangle_state.csv");
 
     throw std::runtime_error("[LOG] Tangle state saved to tangle_state.txt. Exiting simulation.");
 }
