@@ -210,7 +210,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 
     vector<int> timearray;
     int i = 0;
-    while (i < 3)
+    while (i < 10)
     {
         std::cout << "[LOG][SIMULATOR] Generating transaction " << i + 1 << "..." << std::endl;
         i++;
@@ -271,7 +271,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
     }
 
     saveTangleToCSV(tangle.transactions, "tangle_state.csv");
-    std::this_thread::sleep_for(std::chrono::seconds(60));
+    std::this_thread::sleep_for(std::chrono::seconds(300));
 
     throw std::runtime_error("[LOG] Tangle state saved to tangle_state.txt. Exiting simulation.");
 }
