@@ -212,6 +212,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
     int i = 0;
     while (i < 3)
     {
+        std::cout << "[LOG][SIMULATOR] Generating transaction " << i + 1 << "..." << std::endl;
         i++;
         
         Transaction newTx;
@@ -248,7 +249,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // Add the new transaction
         Transaction finalTx = tangle.addNewTransaction(newTx);
 
-        cout << "[LOG][SIMULATOR] Generating new transaction: " << finalTx.data.transaction_id << " at:" << finalTx.data.timestamp << endl;
+        cout << "[LOG][SIMULATOR] Generated new transaction: " << finalTx.data.transaction_id << " at:" << finalTx.data.timestamp << endl;
 
         auto end = chrono::high_resolution_clock::now();
         auto elapsed = duration<double, milli>(end - start).count();
