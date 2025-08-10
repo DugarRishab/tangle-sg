@@ -265,6 +265,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // testSignaturePipeline(finalTx);
 
         net.broadcastTransaction(finalTx);
+        cout << "[LOG][SIMULATOR] Transaction broadcasted completed." << endl;
         this_thread::sleep_for(chrono::seconds(30));
     }
 
