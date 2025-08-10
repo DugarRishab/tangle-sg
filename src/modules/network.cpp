@@ -57,6 +57,8 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
                 for (auto &[uri, peer] : peers.getPeerList())
                 {
                     // if not already open or in the process of connecting
+                    // log peer state
+                    std::cout << "[MONITOR] Peer: " << peer.uri << " State: " << static_cast<int>(peer.state) << "\n";
                     if (peer.state != ConnectionState::OPEN &&
                         peer.state != ConnectionState::CONNECTING)
                     {
@@ -104,6 +106,7 @@ void Network::initClient()
             p.client_hdl = hdl;
             p.state = ConnectionState::OPEN;
             p.retryCount = 0;
+            peers.updatePeer(p);
 
             std::cout << "[LOG] WebSocket connection OPENED with peer "
                       << p.id << " at " << p.address << " : " << p.port << "\n";
@@ -554,7 +557,7 @@ void Network::connectWebSocket(Peer &peer)
         peers.updatePeerState(peer.uri, ConnectionState::FAILED);
         peer.state = ConnectionState::FAILED;
 
-        std::cerr << "[ERROR] Websocket connection NOT established with peer "
+        std::cerr << "[ERROR][CONNECT_WS] Websocket connection NOT established with peer "
                   << peer.id << " at " << peer.address << " : " << peer.port << ". Reason: " << ec.message() << '\n';
         throw std::runtime_error(ec.message());
     }
@@ -568,13 +571,13 @@ void Network::connectWebSocket(Peer &peer)
         peer.state = ConnectionState::CONNECTING;
         peers.updatePeer(peer);
         client->connect(con);
-        std::cout << "Websocket connected to peer: " << peer.id << " at " << peer.address << ":" << peer.port << "\n";
+        std::cout << "[LOG][CONNECT_WS] Websocket connected to peer: " << peer.id << " at " << peer.address << ":" << peer.port << "\n";
     }
     catch (const std::exception &e)
     {
         peer.state = ConnectionState::FAILED;
         peers.updatePeer(peer);
-        std::cerr << "[ERROR] Websocket connection NOT established with peer"
+        std::cerr << "[ERROR][CONNECT_WS] Websocket connection NOT established with peer"
                   << peer.id << " at " << peer.address << " : " << peer.port << ". Reason: " << e.what() << '\n';
     }
 }
@@ -602,15 +605,15 @@ void Network::sendMessage(const string &message, const string &messageType, Peer
         if (peer.state == ConnectionState::OPEN)
         {
             client->send(hdl, fullMessage, websocketpp::frame::opcode::text);
-            cout << "[LOG] Sent message to peer: " << fullMessage << endl;
+            cout << "[LOG][SEND] Sent message to peer: " << fullMessage << endl;
             return;
         }
 
         peer.outgoingQueue.push_back({fullMessage, websocketpp::frame::opcode::text});
-
+        peers.updatePeer(peer); // Update peer state with queued message
         connectWebSocket(peer);
 
-        std::cout << "[LOG] Message queued for peer: " << peer.id << " at " << peer.address << ":" << peer.port << endl;
+        std::cout << "[LOG][SEND] Message queued for peer: " << peer.id << " at " << peer.address << ":" << peer.port << endl;
     }
     catch (const std::exception &e)
     {

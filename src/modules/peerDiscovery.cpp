@@ -335,7 +335,7 @@ void PeerDiscovery::responderLoop()
 						}
 
 						std::cout << "Peer added: " << p.id << " at " << p.address << ":" << p.port << "\n";
-						std::cout << "Total connected Peers: " << peers.countPeers() + 1 << "\n";
+						std::cout << "Total connected Peers: " << peers.countPeers() << "\n";
 					}
 					else
 					{
