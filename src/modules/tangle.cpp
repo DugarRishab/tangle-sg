@@ -82,7 +82,7 @@ int Tangle::addTransaction( Transaction &tx, int update)
     }
 }
 // TODO: make it recursive for each parent until genesis
-void Tangle::updateCumulativeWeightOfParents(vector<std::string> &parents, int weightIncrement = 1)
+void Tangle::updateCumulativeWeightOfParents(vector<std::string> &parents, int weightIncrement)
 {
     for (const auto &parent : parents)
     {
@@ -100,7 +100,7 @@ void Tangle::updateCumulativeWeightOfParents(vector<std::string> &parents, int w
     }
 }
 
-void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weightIncrement = 1)
+void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weightIncrement)
 {
 
     lock_guard<mutex> lock(tangleMutex);
