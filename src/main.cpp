@@ -244,8 +244,11 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         
         auto start = chrono::high_resolution_clock::now();
         // Compute PoW for new transaction
-        performPoW(newTx.data.transaction_id);
-
+        for(auto &parent : newTx.data.parents)
+        {
+            performPoW(newTx.data.transaction_id);
+        }
+        
         // Add the new transaction
         Transaction finalTx = tangle.addNewTransaction(newTx);
 
@@ -257,8 +260,8 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         cout << "[LOG][SIMULATOR] Transaction " << finalTx.data.transaction_id << " added to Tangle." << endl;
         cout << "[LOG][SIMULATOR] Time elapsed:" << elapsed << " ms" << endl;
 
-        auto finalDataSerialized = Tangle::serializeTransaction(finalTx);
-        auto finalDataDeSerialized = Tangle::deserializeTransaction(finalDataSerialized); 
+        // auto finalDataSerialized = Tangle::serializeTransaction(finalTx);
+        // auto finalDataDeSerialized = Tangle::deserializeTransaction(finalDataSerialized); 
 
         // check if finalDataDeSerialized matches with finalTx and print where the mismatch is
 
@@ -407,7 +410,7 @@ int main()
     // Create genesis transaction (without PoW initially)
 
     tx_data genesisData = {
-        "0", // transaction_id
+        "genesis", // transaction_id
         "0",     // sender
         "0",     // receiver
         0,          // amount
@@ -421,13 +424,12 @@ int main()
     tx_metadata genesisMetadata = {
         time(nullptr), // lastUpdated
         0,             // cumulative_weight
-        "",            // signature1
-        "",            // signature2
+        "genesis_sign1",            // signature1
+        "genesis_sign2",            // signature2
         ""             // checksum
     };
     Transaction genesis = {genesisData, genesisMetadata};
     {
-        
         tangle.addTransaction(genesis);
     }
 

@@ -81,31 +81,44 @@ int Tangle::addTransaction( Transaction &tx, int update)
         return 0; // Transaction already exists, no update
     }
 }
-void Tangle::updateCumulativeWeight(const std::string &transaction_id)
+// TODO: make it recursive for each parent until genesis
+void Tangle::updateCumulativeWeightOfParents(vector<std::string> &parents, int weightIncrement = 1)
 {
-
-    lock_guard<mutex> lock(tangleMutex);
-    std::cout << "[LOG][WEIGHT] current cumulative weight for transaction: "
-              << transaction_id << " is " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
-    transactions[transaction_id].metadata.cumulative_weight++;
-    std::cout << "[LOG] Cumulative weight updated for transaction: "
-              << ". New cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
-
-    transactions[transaction_id].metadata.lastUpdated = time(nullptr);
-    // Update cumulative weight for all parents
-    // TODO: make it recursive for each parent until genesis
-    for (const auto &parent : transactions[transaction_id].data.parents)
+    for (const auto &parent : parents)
     {
         if (transactions.find(parent) != transactions.end())
         {
-            transactions[parent].metadata.cumulative_weight++;
+            transactions[parent].metadata.cumulative_weight += weightIncrement;
             transactions[parent].metadata.lastUpdated = time(nullptr);
+
+            updateCumulativeWeightOfParents(transactions[parent].data.parents, weightIncrement);
         }
         else
         {
             std::cerr << "[ERROR] Parent transaction " << parent << " not found in Tangle." << std::endl;
         }
     }
+}
+
+void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weightIncrement = 1)
+{
+
+    lock_guard<mutex> lock(tangleMutex);
+    std::cout << "[LOG][WEIGHT] current cumulative weight for transaction: "
+              << transaction_id << " is " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
+    transactions[transaction_id].metadata.cumulative_weight += weightIncrement;
+    std::cout << "[LOG] Cumulative weight updated for transaction: "
+              << ". New cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
+
+    if(transactions.find(transaction_id) == transactions.end())
+    {
+        std::cerr << "[ERROR] Transaction " << transaction_id << " not found in Tangle." << std::endl;
+        return;
+    }
+    transactions[transaction_id].metadata.lastUpdated = time(nullptr);
+    // Update cumulative weight for all parents
+   
+    updateCumulativeWeightOfParents(transactions[transaction_id].data.parents, weightIncrement);
 }
 
 string Tangle::serializeTransactionData(const Transaction &tx)
@@ -350,11 +363,25 @@ int Tangle::updateTransaction(Transaction &tx)
     {
         if (it->second.metadata.lastUpdated < tx.metadata.lastUpdated)
         {
-            it->second.metadata.cumulative_weight = tx.metadata.cumulative_weight;
-            it->second.metadata.lastUpdated = tx.metadata.lastUpdated;
 
-            if (it->second.metadata.signature2.empty())
+            if (it->second.metadata.signature2.empty()){
                 it->second.metadata.signature2 = tx.metadata.signature2;
+                it->second.metadata.lastUpdated = tx.metadata.lastUpdated;
+            }
+                
+
+            if (!it->second.metadata.signature2.empty() && !it->second.metadata.signature1.empty())
+            {
+                // allow weight updates only if both signatures are present
+                int weightIncrement = tx.metadata.cumulative_weight - it->second.metadata.cumulative_weight;
+                if (weightIncrement > 0){
+                    it->second.metadata.cumulative_weight += weightIncrement;
+                    it->second.metadata.lastUpdated = tx.metadata.lastUpdated;
+                    updateCumulativeWeightOfParents(it->second.data.parents, weightIncrement);
+                }
+                
+            }
+            
 
             std::cout << "[LOG] Transaction updated in Tangle: " << tx.data.transaction_id << endl;
 
