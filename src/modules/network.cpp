@@ -40,14 +40,27 @@ Network::Network(uint16_t ws_port, Tangle &tangle, Peers &peers) : ws_port(ws_po
 
 Network::~Network()
 {
+    stopPeerMonitor();
+    if (monitorThread.joinable())
+    {
+        monitorThread.join();
+    }
+    std::cout << "[LOG] Network module destroyed." << std::endl;
 }
 
 void Network::startPeerMonitor(std::chrono::milliseconds interval)
 {
+    // stop existing monitor if running
+    if (monitorRunning_.load())
+        return; // if it's already true, exit immediately
+
+    monitorRunning_.store(true);
+    // mark it as running so nobody else starts it again
+
     monitorThread = std::thread(
         [this, interval]()
         {
-            while (true)
+            while (monitorRunning_.load())
             {
                 std::cout << "[MONITOR] Checking active peers...\n";
                 std::cout << "[MONITOR] Active peers count: " << peers.countPeers() << "\n";
@@ -72,7 +85,24 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
             }
         });
 
-    monitorThread.detach();
+    // monitorThread.detach();
+}
+
+void Network::stopPeerMonitor()
+{
+    if (monitorRunning_.load())
+    {
+        monitorRunning_.store(false);
+        if (monitorThread.joinable())
+        {
+            monitorThread.join();
+        }
+        std::cout << "[MONITOR] Peer monitor stopped.\n";
+    }
+    else
+    {
+        std::cout << "[MONITOR] Peer monitor is not running.\n";
+    }
 }
 
 void Network::initClient()
@@ -542,11 +572,13 @@ void Network::sendTangle(Peer &peer)
 // TODO: sendSyncRequest() function
 
 // Connect to a peer via WebSocket (client side)
-void Network::connectWebSocket(Peer &peer)
+bool Network::connectWebSocket(Peer &peer)
 {
-    if (peer.state == ConnectionState::CONNECTING ||
-        peer.state == ConnectionState::OPEN)
-        return;
+    auto peerCopy = peers.getPeer(peer.uri);
+    
+    if (peerCopy.state == ConnectionState::CONNECTING ||
+        peerCopy.state == ConnectionState::OPEN)
+        return true;
 
     websocketpp::lib::error_code ec;
     auto uri = "ws://" + peer.address + ":" + std::to_string(ws_port);
@@ -559,7 +591,7 @@ void Network::connectWebSocket(Peer &peer)
 
         std::cerr << "[ERROR][CONNECT_WS] Websocket connection NOT established with peer "
                   << peer.id << " at " << peer.address << " : " << peer.port << ". Reason: " << ec.message() << '\n';
-        throw std::runtime_error(ec.message());
+        return false;
     }
 
     // Save outbound handle
@@ -571,7 +603,9 @@ void Network::connectWebSocket(Peer &peer)
         peer.state = ConnectionState::CONNECTING;
         peers.updatePeer(peer);
         client->connect(con);
+        
         std::cout << "[LOG][CONNECT_WS] Websocket connected to peer: " << peer.id << " at " << peer.address << ":" << peer.port << "\n";
+        return true; // Connection initiated successfully
     }
     catch (const std::exception &e)
     {
@@ -579,6 +613,7 @@ void Network::connectWebSocket(Peer &peer)
         peers.updatePeer(peer);
         std::cerr << "[ERROR][CONNECT_WS] Websocket connection NOT established with peer"
                   << peer.id << " at " << peer.address << " : " << peer.port << ". Reason: " << e.what() << '\n';
+        return false; // Connection initiation failed
     }
 }
 
