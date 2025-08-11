@@ -23,7 +23,6 @@ using namespace std;
 using namespace chrono;
 namespace fs = std::filesystem;
 
-
 const std::string KEYFILE_PRIV = "keys/node.key";
 const std::string KEYFILE_PUB = "keys/node.pub";
 const std::string HMAC_SECRET_FILE = "secret/hmac_secret.txt";
@@ -162,13 +161,11 @@ void compareTransactions(const Transaction &a, const Transaction &b)
         std::cout << "[MISMATCH] signature2: "
                   << a.metadata.signature2 << " != " << b.metadata.signature2 << "\n";
 
-
-    // 
-    
+    //
 }
 
 void testSignaturePipeline(const Transaction &originalTx)
-{ 
+{
 
     std::string fullSerialized = Tangle::serializeTransaction(originalTx);
 
@@ -214,7 +211,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
     {
         std::cout << "[LOG][SIMULATOR] Generating transaction " << i + 1 << "..." << std::endl;
         i++;
-        
+
         Transaction newTx;
 
         if (peers.countPeers() == 0)
@@ -227,8 +224,8 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 
         vector<string> parents = selectTips(tangle, 2);
         // receiver is selected randomly from the list of active peers
-        string receiver = peers.getRandomPeer().id;                                                                                                                                    
-        
+        string receiver = peers.getRandomPeer().id;
+
         newTx.data.timestamp = time(nullptr);
         newTx.data.timestampInt = static_cast<int>(time(nullptr));
         newTx.data.sender = getenv("UID"); // Use UID from environment variable
@@ -241,19 +238,18 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         newTx.metadata.lastUpdated = time(nullptr);
         newTx.metadata.cumulative_weight = 0; // Initialize cumulative weight
 
-        
         auto start = chrono::high_resolution_clock::now();
         // Compute PoW for new transaction
-       
-        
+
         // Add the new transaction
         Transaction finalTx = tangle.addNewTransaction(newTx);
 
-        
-            performPoW(finalTx.data.transaction_id);
-        
+        std::cout << "[SIMULATOR][POW] starting...";
+        performPoW(finalTx.data.transaction_id);
+        std::cout << "[SIMULATOR][POW] over";
 
-        cout << "[LOG][SIMULATOR] Generated new transaction: " << finalTx.data.transaction_id << " at:" << finalTx.data.timestamp << endl;
+        cout << "[LOG][SIMULATOR] Generated new transaction: "
+             << finalTx.data.transaction_id << " at:" << finalTx.data.timestamp << endl;
 
         auto end = chrono::high_resolution_clock::now();
         auto elapsed = duration<double, milli>(end - start).count();
@@ -262,10 +258,9 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         cout << "[LOG][SIMULATOR] Time elapsed:" << elapsed << " ms" << endl;
 
         // auto finalDataSerialized = Tangle::serializeTransaction(finalTx);
-        // auto finalDataDeSerialized = Tangle::deserializeTransaction(finalDataSerialized); 
+        // auto finalDataDeSerialized = Tangle::deserializeTransaction(finalDataSerialized);
 
         // check if finalDataDeSerialized matches with finalTx and print where the mismatch is
-
 
         // testSignaturePipeline(finalTx);
 
@@ -274,7 +269,6 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         this_thread::sleep_for(chrono::seconds(30));
     }
 
-    
     std::this_thread::sleep_for(std::chrono::seconds(300));
     saveTangleToCSV(tangle.transactions, "tangle_state.csv");
 
@@ -346,7 +340,7 @@ std::string loadOrCreateHMACSecret(const std::string &path)
 int main()
 {
     std::cout.setf(std::ios::unitbuf);
-    
+
     if (sodium_init() < 0)
     {
         std::cerr << "Failed to init libsodium\n";
@@ -391,12 +385,15 @@ int main()
     std::cout << "Node UID: " << uid << std::endl;
 
     // Export UID as environment variable for child processes at runtime
-     // Export as environment variables for runtime
-    if (setenv("PK_b64",  pk_b64.c_str(), 1) != 0 ||
-        setenv("SK_b64",  sk_b64.c_str(), 1) != 0 ||
-        setenv("UID", uid.c_str(),    1) != 0) {
+    // Export as environment variables for runtime
+    if (setenv("PK_b64", pk_b64.c_str(), 1) != 0 ||
+        setenv("SK_b64", sk_b64.c_str(), 1) != 0 ||
+        setenv("UID", uid.c_str(), 1) != 0)
+    {
         std::cerr << "Failed to set environment variables\n";
-    } else {
+    }
+    else
+    {
         std::cout << "Exported PK_b64, SK_b64, and UID to environment.\n";
     }
 
@@ -411,23 +408,23 @@ int main()
     // Create genesis transaction (without PoW initially)
 
     tx_data genesisData = {
-        "genesis", // transaction_id
-        "0",     // sender
-        "0",     // receiver
-        0,          // amount
-        "kWh",        // unit
-        0,         // price_per_unit
-        "INR",        // currency
-        time(nullptr),// timestamp
+        "genesis",                       // transaction_id
+        "0",                             // sender
+        "0",                             // receiver
+        0,                               // amount
+        "kWh",                           // unit
+        0,                               // price_per_unit
+        "INR",                           // currency
+        time(nullptr),                   // timestamp
         static_cast<int>(time(nullptr)), // timestampInt
-        {}            // parents (empty for genesis)
+        {}                               // parents (empty for genesis)
     };
     tx_metadata genesisMetadata = {
-        time(nullptr), // lastUpdated
-        0,             // cumulative_weight
-        "genesis_sign1",            // signature1
-        "genesis_sign2",            // signature2
-        ""             // checksum
+        time(nullptr),   // lastUpdated
+        0,               // cumulative_weight
+        "genesis_sign1", // signature1
+        "genesis_sign2", // signature2
+        ""               // checksum
     };
     Transaction genesis = {genesisData, genesisMetadata};
     {
@@ -447,8 +444,6 @@ int main()
             // return 1;
         }
     };
-
-    
 
     // THREAD 2: Simulation loop
     auto simWrapper = [&]()
