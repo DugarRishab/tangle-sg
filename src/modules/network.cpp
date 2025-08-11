@@ -35,12 +35,12 @@ Network::Network(uint16_t ws_port, Tangle &tangle, Peers &peers) : ws_port(ws_po
 {
     initServer();
     initClient();
-    startPeerMonitor(std::chrono::seconds(30));
+    // startPeerMonitor(std::chrono::seconds(30));
 }
 
 Network::~Network()
 {
-    stopPeerMonitor();
+    // stopPeerMonitor();
     if (monitorThread.joinable())
     {
         monitorThread.join();
@@ -664,7 +664,7 @@ void Network::sendMessage(const string &message, const string &messageType, Peer
 
         peer.outgoingQueue.push_back({fullMessage, websocketpp::frame::opcode::text});
         peers.updatePeer(peer); // Update peer state with queued message
-        // connectWebSocket(peer);
+        connectWebSocket(peer);
 
         std::cout << "[LOG][SEND] Message queued for peer: " << peer.id << " at " << peer.address << ":" << peer.port << endl;
     }
