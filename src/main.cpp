@@ -249,10 +249,9 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // Add the new transaction
         Transaction finalTx = tangle.addNewTransaction(newTx);
 
-        for (auto &parent : finalTx.data.parents)
-        {
+        
             performPoW(finalTx.data.transaction_id);
-        }
+        
 
         cout << "[LOG][SIMULATOR] Generated new transaction: " << finalTx.data.transaction_id << " at:" << finalTx.data.timestamp << endl;
 
