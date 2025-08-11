@@ -664,7 +664,7 @@ void Network::sendMessage(const string &message, const string &messageType, Peer
 
         peer.outgoingQueue.push_back({fullMessage, websocketpp::frame::opcode::text});
         peers.updatePeer(peer); // Update peer state with queued message
-        connectWebSocket(peer);
+        // connectWebSocket(peer);
 
         std::cout << "[LOG][SEND] Message queued for peer: " << peer.id << " at " << peer.address << ":" << peer.port << endl;
     }
