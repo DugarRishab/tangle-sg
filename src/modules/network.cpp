@@ -64,24 +64,48 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
             {
                 std::cout << "[MONITOR] Checking active peers...\n";
                 std::cout << "[MONITOR] Active peers count: " << peers.countPeers() << "\n";
-                
-                auto now = std::chrono::steady_clock::now();
+
+                // auto now = std::chrono::steady_clock::now();
 
                 for (auto &[uri, peer] : peers.getPeerList())
                 {
                     // if not already open or in the process of connecting
                     // log peer state
                     std::cout << "[MONITOR] Peer: " << peer.uri << " State: " << static_cast<int>(peer.state) << "\n";
-                    if (peer.state != ConnectionState::OPEN &&
-                        peer.state != ConnectionState::CONNECTING)
+
+                    auto now = std::chrono::steady_clock::now();
+
+                    // Skip peers that are already connected or connecting
+                    if (peer.state == ConnectionState::OPEN ||
+                        peer.state == ConnectionState::CONNECTING)
                     {
-                        std::cout << "[MONITOR] Attempting reconnect to " << uri << "\n";
-                        connectWebSocket(peer);
-                        
+                        continue;
                     }
+
+                    // If retryCount reached limit, skip
+                    if (peer.retryCount >= 3)
+                    {
+                        std::cout << "[MONITOR] Skipping " << peer.id << " - max retries reached.\n";
+                        continue;
+                    }
+
+                    // If it's not yet time to retry, skip
+                    if (now < peer.nextRetry)
+                    {
+                        auto remaining_ms = std::chrono::duration_cast<std::chrono::milliseconds>(peer.nextRetry - now).count();
+                        std::cout << "[MONITOR] Waiting " << remaining_ms << " ms before retrying " << peer.id << "\n";
+                        continue;
+                    }
+
+                    std::cout << "[MONITOR] Attempting reconnect to " << uri << "\n";
+                    connectWebSocket(peer);
                 }
 
-                std::this_thread::sleep_until(now + interval);
+                auto target = std::chrono::steady_clock::now() + interval;
+                while (monitorRunning_.load() && std::chrono::steady_clock::now() < target)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                }
             }
         });
 
@@ -108,7 +132,6 @@ void Network::stopPeerMonitor()
 void Network::initClient()
 {
     client = std::make_shared<WsClient>();
-    
 
     // client->clear_access_channels(websocketpp::log::alevel::all);
     // client->set_access_channels(websocketpp::log::alevel::connect |
@@ -395,8 +418,6 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
             // Handle new transaction
             Transaction newTx = Tangle::deserializeTransaction(data);
 
-            
-
             // TODO: check sign status of tx
             if (newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
             {
@@ -427,18 +448,18 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                 int isTxPresent = tangle.addTransaction(newTx, 1);
                 Transaction tx = tangle.transactions[newTx.data.transaction_id];
                 // check if the receiver is same as the host node.
-                if(isTxPresent == 0)
+                if (isTxPresent == 0)
                 {
                     cout << "[LOG] Transaction already exists in Tangle. No Updates. Not broadcasting." << endl;
                     return;
                 }
-                if(isTxPresent == 1)
+                if (isTxPresent == 1)
                 {
                     cout << "[LOG] Transaction already exists in Tangle. Updating it." << endl;
 
                     broadcastTransaction(tangle.transactions[tx.data.transaction_id]);
                 }
-                if(isTxPresent == 2)
+                if (isTxPresent == 2)
                 {
                     cout << "[LOG] Transaction added to Tangle. Broadcasting." << endl;
 
@@ -455,12 +476,10 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                         tx.metadata.lastUpdated = std::time(nullptr);
                         tangle.updateTransaction(tx);
                         tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
-                         // Update the transaction in Tangle
+                                                                               // Update the transaction in Tangle
                     }
                     broadcastTransaction(tangle.transactions[newTx.data.transaction_id]);
                 }
-                
-                
             }
             // double signed transaction
             else if (!newTx.metadata.signature1.empty() && !newTx.metadata.signature2.empty())
@@ -494,17 +513,17 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     cout << "[LOG] Transaction already exists in Tangle. Updating it." << endl;
                     broadcastTransaction(tangle.transactions[newTx.data.transaction_id]);
                 }
-                else{
+                else
+                {
                     cout << "LOG] Transaction added to Tangle. Broadcasting." << endl;
                     // perform PoW on the transaction
                     performPoW(tx.data.transaction_id);
-                    
+
                     tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
-                    
+
                     broadcastTransaction(tangle.transactions[newTx.data.transaction_id]);
                 }
             }
-            
         }
         if (messageType == "SYNC_REQ")
         {
@@ -575,14 +594,14 @@ void Network::sendTangle(Peer &peer)
 bool Network::connectWebSocket(Peer &peer)
 {
     auto peerCopy = peers.getPeer(peer.uri);
-    
+
     if (peerCopy.state == ConnectionState::CONNECTING ||
         peerCopy.state == ConnectionState::OPEN)
         return true;
 
     websocketpp::lib::error_code ec;
     auto uri = "ws://" + peer.address + ":" + std::to_string(ws_port);
-    
+
     auto con = client->get_connection(uri, ec);
     if (ec)
     {
@@ -596,14 +615,13 @@ bool Network::connectWebSocket(Peer &peer)
 
     // Save outbound handle
     peer.client_hdl = con->get_handle();
-    
 
     try
     {
         peer.state = ConnectionState::CONNECTING;
         peers.updatePeer(peer);
         client->connect(con);
-        
+
         std::cout << "[LOG][CONNECT_WS] Websocket connected to peer: " << peer.id << " at " << peer.address << ":" << peer.port << "\n";
         return true; // Connection initiated successfully
     }

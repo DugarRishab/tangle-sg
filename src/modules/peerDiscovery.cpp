@@ -291,6 +291,7 @@ void PeerDiscovery::responderLoop()
 					{
 						
 						Peer p{A_UID, inet_ntoa(sender.sin_addr), (int)port_};
+						p.nextRetry = std::chrono::steady_clock::now() + std::chrono::seconds(2);
 						auto uri = "ws://" + p.address + ":" + std::to_string(ws_port) + "/";
 						p.uri = uri;
 						net.connectWebSocket(p);
