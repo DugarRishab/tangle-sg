@@ -82,7 +82,7 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
                         std::deque<Message> outgoingQueue;
                         if (peers.drainOutgoingQueue(peer.uri, outgoingQueue))
                         {
-                            for (auto &qm : outgoingQueue.front())
+                            for (auto &qm : outgoingQueue)
                             {
                                 client->send(peer.client_hdl, qm.payload, qm.opcode);
                                 std::cout << "[LOG] Sent queued message to peer " << peer.id << ": " << qm.payload << "\n";
@@ -180,7 +180,7 @@ void Network::initClient()
             std::deque<Message> outgoingQueue;
             if (peers.drainOutgoingQueue(p.uri, outgoingQueue))
             {
-                for (auto &qm : outgoingQueue.front())
+                for (auto &qm : outgoingQueue)
                 {
                     client->send(hdl, qm.payload, qm.opcode);
                     std::cout << "[LOG] Sent queued message to peer " << p.id << ": " << qm.payload << "\n";
