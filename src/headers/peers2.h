@@ -84,7 +84,7 @@ public:
 	std::unordered_map<std::string, Peer> getPeerList();
 	Peer getRandomPeer();
 
-	void Peers::enqueueMessage(const std::string &uri, Message &qm);
+	void enqueueMessage(const std::string &uri, Message &qm);
 	bool drainOutgoingQueue(const std::string &uri, std::deque<Message> &outgoingQueue);
 
 private:

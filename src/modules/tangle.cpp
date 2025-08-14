@@ -28,6 +28,13 @@ Transaction Tangle::getTransaction(std::string &transaction_id)
     }
 }
 
+std::unordered_map<std::string, Transaction> Tangle::getAllTransctions()
+{
+    lock_guard<mutex> lock(tangleMutex);
+
+    return transactions;
+}
+
 Transaction Tangle::addNewTransaction(Transaction &tx)
 {
     // calculate checksum
