@@ -231,7 +231,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 
         std::cout << "[SIMULATOR][" << std::this_thread::get_id() << "] before getRandomPeer" << std::endl
                   << std::flush;
-        auto peer = peers.getRandomPeer();
+        string receiver = peers.getRandomPeer().id;
         std::cout << "[SIMULATOR][" << std::this_thread::get_id() << "] after getRandomPeer" << std::endl
                   << std::flush;
 
