@@ -15,7 +15,7 @@ std::vector<std::string> selectTips(Tangle &tangle, int numTips)
     std::string genesisTx = "genesis"; // Assuming you store genesis transaction ID here
 
     // Separate transactions into categories
-    for (const auto &pair : tangle.transactions)
+    for (const auto &pair : tangle.getAllTransactions())
     {
         const auto &tx = pair.second;
         bool verified = !tx.metadata.signature1.empty() && !tx.metadata.signature2.empty();
@@ -54,7 +54,7 @@ std::vector<std::string> selectTips(Tangle &tangle, int numTips)
     }
 
     // 3. If still not enough, add genesis once (only if no verified tx at all)
-    if (selected.empty() && tangle.transactions.find(genesisTx) != tangle.transactions.end())
+    if (selected.empty())
     {
         selected.push_back(genesisTx);
     }
