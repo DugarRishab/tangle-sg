@@ -225,10 +225,10 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         vector<string> parents = selectTips(tangle, 2);
         std::cout << "[SIMULATOR][TSA] Completed." << std::endl;
         // receiver is selected randomly from the list of active peers
-        std::cout << "[SIMULATOR][TSA] Completed." << std::endl;
+        std::cout << "[SIMULATOR][RECEIVER] Completed." << std::endl;
         string receiver = peers.getRandomPeer().id;
-        std::cout << "[SIMULATOR][TSA] Completed." << std::endl;
-        
+        std::cout << "[SIMULATOR][RECEIVER] Completed." << std::endl;
+
         newTx.data.timestamp = time(nullptr);
         newTx.data.timestampInt = static_cast<int>(time(nullptr));
         newTx.data.sender = getenv("UID"); // Use UID from environment variable
