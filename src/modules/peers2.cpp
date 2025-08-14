@@ -19,6 +19,7 @@
 #include "../headers/network.h"
 #include "../headers/tangle.h"
 #include "../headers/debug_lock.h"
+#include <execinfo.h>
 
 using namespace std;
 
@@ -28,6 +29,20 @@ Peers::Peers()
 
 Peers::~Peers()
 {
+}
+
+static void dump_backtrace_once()
+{
+	void *buf[32];
+	int n = backtrace(buf, sizeof(buf) / sizeof(buf[0]));
+	char **strs = backtrace_symbols(buf, n);
+	std::cerr << "=== backtrace (begin) ===\n";
+	for (int i = 0; i < n; ++i)
+	{
+		std::cerr << "[" << i << "] " << (strs ? strs[i] : "(null)") << "\n";
+	}
+	std::cerr << "=== backtrace (end) ===\n";
+	free(strs);
 }
 
 int Peers::addPeer(Peer &peer)
@@ -87,6 +102,7 @@ Peer Peers::getPeer(std::string uri)
 	}
 
 	std::cerr << "[WARN][GET] Peer with ID " << uri << " not found.\n";
+	dump_backtrace_once();
 	return Peer{}; // Peer not found
 }
 

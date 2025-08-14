@@ -275,7 +275,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 
         net.broadcastTransaction(finalTx);
         cout << "[LOG][SIMULATOR] Transaction broadcasted completed." << endl;
-        this_thread::sleep_for(chrono::seconds(20));
+        this_thread::sleep_for(chrono::seconds(30));
     }
 
     std::this_thread::sleep_for(std::chrono::seconds(300));
@@ -459,6 +459,8 @@ int main()
     {
         try
         {
+            // add delay of 15seconds to allow server to start
+            std::this_thread::sleep_for(std::chrono::seconds(15));
             std::cout << "[THREAD] simulateSmartMeter() beginning…\n";
             simulateSmartMeter(tangle, peers, net); // your existing function
             std::cout << "[THREAD] simulateSmartMeter() returned!\n";
