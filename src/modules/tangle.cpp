@@ -6,17 +6,19 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <shared_mutex>
 #include <openssl/sha.h>
 #include <iomanip>
 #include "../headers/debug_lock.h"
 using namespace std;
 
-std::mutex tangleMutex;
+std::shared_mutex tangleMutex;
 
 Transaction Tangle::getTransaction(std::string &transaction_id)
 {
     // lock_guard<mutex> lock(tangleMutex);
-    DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    std::shared_lock lock(tangleMutex);
 
     auto it = transactions.find(transaction_id);
     if (it != transactions.end())
@@ -33,7 +35,8 @@ Transaction Tangle::getTransaction(std::string &transaction_id)
 std::unordered_map<std::string, Transaction> Tangle::getAllTransactions()
 {
     // lock_guard<mutex> lock(tangleMutex);
-    DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    std::shared_lock lock(tangleMutex);
 
     // Return a copy of the transactions map
     std::unordered_map<std::string, Transaction> transactionsCopy = transactions;
@@ -60,7 +63,8 @@ Transaction Tangle::addNewTransaction(Transaction &tx)
 
     // Lock the mutex to protect shared Tangle access
     // lock_guard<mutex> lock(tangleMutex);
-    DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    std::unique_lock lock(tangleMutex);
 
     transactions[tx.data.transaction_id] = tx;
 
@@ -70,7 +74,8 @@ int Tangle::addTransaction( Transaction &tx, int update)
 {
     // Lock the mutex to protect shared Tangle access
     // lock_guard<mutex> lock(tangleMutex);
-    DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    std::unique_lock lock(tangleMutex);
 
     // TODO: check if tx already exists
     auto it = transactions.find(tx.data.transaction_id);
@@ -117,7 +122,8 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weigh
 {
 
     // lock_guard<mutex> lock(tangleMutex);
-    DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    std::unique_lock lock(tangleMutex);
 
     std::cout << "[LOG][WEIGHT] current cumulative weight for transaction: "
               << transaction_id << " is " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
@@ -324,7 +330,8 @@ void Tangle::updateFromSerialized(const string &data)
         {
             newTx.data.parents.push_back(prevTx);
         }
-        DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+        // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+        std::unique_lock lock(tangleMutex);
         // Add the new transaction to the Tangle
         transactions[newTx.data.transaction_id] = newTx;
         lastTx = newTx; // Keep track of the last transaction for cumulative weight updates
@@ -338,7 +345,8 @@ void Tangle::updateFromSerialized(const string &data)
 // function to check if tx is already present in the tangle
 bool Tangle::transactionPresent(Transaction &tx)
 {
-    DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    std::shared_lock lock(tangleMutex);
 
     // Check if the transaction ID exists in the Tangle's transactions
     return transactions.find(tx.data.transaction_id) != transactions.end();
@@ -347,7 +355,8 @@ bool Tangle::transactionPresent(Transaction &tx)
 bool Tangle::transactionNeedsUpdate(Transaction &tx)
 {
     // lock_guard<mutex> lock(tangleMutex);
-    DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    std::shared_lock lock(tangleMutex);
 
     auto it = transactions.find(tx.data.transaction_id);
     if (it != transactions.end())
@@ -374,7 +383,8 @@ int Tangle::updateTransaction(Transaction &tx)
 {
     // only update cumulative weight and last updated time
     // lock_guard<mutex> lock(tangleMutex);
-    DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    std::unique_lock lock(tangleMutex);
 
     auto it = transactions.find(tx.data.transaction_id);
     if (it != transactions.end())

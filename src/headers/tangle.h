@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <string>
+#include <shared_mutex>
 
 using namespace std;
 
@@ -31,6 +32,6 @@ public:
 
 private:
     std::unordered_map<std::string, Transaction> transactions;
-    std::mutex tangleMutex; // Mutex to protect shared Tangle access
+    std::shared_mutex tangleMutex; // Mutex to protect shared Tangle access
 };
 #endif
