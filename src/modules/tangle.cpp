@@ -8,14 +8,16 @@
 #include <unordered_map>
 #include <openssl/sha.h>
 #include <iomanip>
-
+#include "../headers/debug_lock.h"
 using namespace std;
 
 std::mutex tangleMutex;
 
 Transaction Tangle::getTransaction(std::string &transaction_id)
 {
-    lock_guard<mutex> lock(tangleMutex);
+    // lock_guard<mutex> lock(tangleMutex);
+    TimedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+
     auto it = transactions.find(transaction_id);
     if (it != transactions.end())
     {
@@ -30,9 +32,12 @@ Transaction Tangle::getTransaction(std::string &transaction_id)
 
 std::unordered_map<std::string, Transaction> Tangle::getAllTransactions()
 {
-    lock_guard<mutex> lock(tangleMutex);
+    // lock_guard<mutex> lock(tangleMutex);
+    TimedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
 
-    return transactions;
+    // Return a copy of the transactions map
+    std::unordered_map<std::string, Transaction> transactionsCopy = transactions;
+    return transactionsCopy;
 }
 
 Transaction Tangle::addNewTransaction(Transaction &tx)
@@ -54,7 +59,9 @@ Transaction Tangle::addNewTransaction(Transaction &tx)
     tx.metadata.signature1 = signTransaction(txData);
 
     // Lock the mutex to protect shared Tangle access
-    lock_guard<mutex> lock(tangleMutex);
+    // lock_guard<mutex> lock(tangleMutex);
+    TimedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+
     transactions[tx.data.transaction_id] = tx;
 
     return tx;
@@ -62,7 +69,9 @@ Transaction Tangle::addNewTransaction(Transaction &tx)
 int Tangle::addTransaction( Transaction &tx, int update)
 {
     // Lock the mutex to protect shared Tangle access
-    lock_guard<mutex> lock(tangleMutex);
+    // lock_guard<mutex> lock(tangleMutex);
+    TimedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+
     // TODO: check if tx already exists
     auto it = transactions.find(tx.data.transaction_id);
     if (it == transactions.end())
@@ -105,7 +114,9 @@ void Tangle::updateCumulativeWeightOfParents(vector<std::string> &parents, int w
 void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weightIncrement)
 {
 
-    lock_guard<mutex> lock(tangleMutex);
+    // lock_guard<mutex> lock(tangleMutex);
+    TimedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+
     std::cout << "[LOG][WEIGHT] current cumulative weight for transaction: "
               << transaction_id << " is " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
     transactions[transaction_id].metadata.cumulative_weight += weightIncrement;
@@ -333,7 +344,8 @@ bool Tangle::transactionPresent(Transaction &tx)
 
 bool Tangle::transactionNeedsUpdate(Transaction &tx)
 {
-    lock_guard<mutex> lock(tangleMutex);
+    // lock_guard<mutex> lock(tangleMutex);
+    TimedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
 
     auto it = transactions.find(tx.data.transaction_id);
     if (it != transactions.end())
@@ -359,7 +371,9 @@ bool Tangle::transactionNeedsUpdate(Transaction &tx)
 int Tangle::updateTransaction(Transaction &tx)
 {
     // only update cumulative weight and last updated time
-    lock_guard<mutex> lock(tangleMutex);
+    // lock_guard<mutex> lock(tangleMutex);
+    TimedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+
     auto it = transactions.find(tx.data.transaction_id);
     if (it != transactions.end())
     {
