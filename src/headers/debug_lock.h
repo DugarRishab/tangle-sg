@@ -10,7 +10,7 @@
 struct LockStats
 {
 	// optional global counter for debug
-	static std::atomic<int> total_locks;
+	inline static std::atomic<int> total_locks;
 };
 std::atomic<int> LockStats::total_locks{0};
 
