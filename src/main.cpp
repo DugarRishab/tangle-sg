@@ -247,9 +247,9 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // Add the new transaction
         Transaction finalTx = tangle.addNewTransaction(newTx);
 
-        std::cout << "[SIMULATOR][POW] starting...";
+        std::cout << "[SIMULATOR][POW] starting..." << std::endl;
         performPoW(finalTx.data.transaction_id);
-        std::cout << "[SIMULATOR][POW] over";
+        std::cout << "[SIMULATOR][POW] over" << std::endl;
 
         cout << "[LOG][SIMULATOR] Generated new transaction: "
              << finalTx.data.transaction_id << " at:" << finalTx.data.timestamp << endl;
@@ -269,7 +269,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 
         net.broadcastTransaction(finalTx);
         cout << "[LOG][SIMULATOR] Transaction broadcasted completed." << endl;
-        this_thread::sleep_for(chrono::seconds(30));
+        this_thread::sleep_for(chrono::seconds(20));
     }
 
     std::this_thread::sleep_for(std::chrono::seconds(300));

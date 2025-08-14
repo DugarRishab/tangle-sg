@@ -120,7 +120,7 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weigh
     transactions[transaction_id].metadata.lastUpdated = time(nullptr);
     // Update cumulative weight for all parents
    
-    updateCumulativeWeightOfParents(transactions[transaction_id].data.parents, weightIncrement);
+    // updateCumulativeWeightOfParents(transactions[transaction_id].data.parents, weightIncrement);
 }
 
 string Tangle::serializeTransactionData(const Transaction &tx)
