@@ -82,8 +82,8 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
                         while (!peer.outgoingQueue.empty() && peer.state == ConnectionState::OPEN)
                         {
                             auto &qm = peer.outgoingQueue.front();
-                            client->send(hdl, qm.payload, qm.opcode);
-                            std::cout << "[LOG] Sent queued message to peer " << p.id << ": " << qm.payload << "\n";
+                            client->send(peer.client_hdl, qm.payload, qm.opcode);
+                            std::cout << "[LOG] Sent queued message to peer " << peer.id << ": " << qm.payload << "\n";
                             peer.outgoingQueue.pop_front();
                             peers.updatePeer(peer);
                         }
