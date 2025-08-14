@@ -13,25 +13,20 @@ using namespace std;
 
 std::mutex tangleMutex;
 
-// string computeChecksum(const string &data)
-// {
-//     unsigned char hash[SHA256_DIGEST_LENGTH];
-//     SHA256((unsigned char *)data.c_str(), data.size(), hash);
-
-//     stringstream ss;
-//     for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
-//     {
-//         ss << hex << setw(2) << setfill('0') << (int)hash[i];
-//     }
-//     return ss.str();
-// }
-
-// // Verifies that the received data has a correct checksum
-// bool verifyChecksum(const string &data, const string &receivedChecksum)
-// {
-//     string calculatedChecksum = computeChecksum(data);
-//     return calculatedChecksum == receivedChecksum;
-// }
+Transaction Tangle::getTransaction(std::string &transaction_id)
+{
+    lock_guard<mutex> lock(tangleMutex);
+    auto it = transactions.find(transaction_id);
+    if (it != transactions.end())
+    {
+        return it->second; // Return the found transaction
+    }
+    else
+    {
+        std::cerr << "[ERROR] Transaction with ID " << transaction_id << " not found in Tangle." << std::endl;
+        return Transaction(); // Return an empty transaction if not found
+    }
+}
 
 Transaction Tangle::addNewTransaction(Transaction &tx)
 {

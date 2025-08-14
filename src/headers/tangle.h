@@ -10,6 +10,7 @@ using namespace std;
 class Tangle
 {
 public:
+    Transaction getTransaction(std::string &transaction_id); // Retrieves a transaction by its ID
     Transaction addNewTransaction(Transaction& tx);
     int addTransaction( Transaction& tx, int update = 0);
     void updateCumulativeWeightOfParents(vector<std::string> &parents, int weightIncrement = 1);
@@ -20,12 +21,15 @@ public:
     std::unordered_map<std::string, Transaction> deserialize(const std::string &data); // Converts a string format back to Tangle's transactions
     static Transaction deserializeTransaction(const std::string& data); // Deserializes a single transaction
     void updateFromSerialized(const std::string& data); // Updates Tangle from serialized string
-    std::unordered_map<std::string, Transaction> transactions;
+    
     bool transactionPresent( Transaction& tx);
     bool transactionNeedsUpdate(Transaction &tx);
     int updateTransaction(Transaction &tx);
 
+
+
 private:
+    std::unordered_map<std::string, Transaction> transactions;
     std::mutex tangleMutex; // Mutex to protect shared Tangle access
 };
 #endif

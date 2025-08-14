@@ -79,13 +79,15 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
                     if (peer.state == ConnectionState::OPEN ||
                         peer.state == ConnectionState::CONNECTING)
                     {
-                        while (!peer.outgoingQueue.empty() && peer.state == ConnectionState::OPEN)
+                        std::deque<Message> outgoingQueue;
+                        if (peers.drainOutgoingQueue(peer.uri, outgoingQueue))
                         {
-                            auto &qm = peer.outgoingQueue.front();
-                            client->send(peer.client_hdl, qm.payload, qm.opcode);
-                            std::cout << "[LOG] Sent queued message to peer " << peer.id << ": " << qm.payload << "\n";
-                            peer.outgoingQueue.pop_front();
-                            peers.updatePeer(peer);
+                            for (auto &qm = outgoingQueue.front())
+                            {
+                                client->send(hdl, qm.payload, qm.opcode);
+                                std::cout << "[LOG] Sent queued message to peer " << peer.id << ": " << qm.payload << "\n";
+                                outgoingQueue.pop_front();
+                            }
                         }
 
                         continue;
@@ -175,13 +177,16 @@ void Network::initClient()
                       << p.id << " at " << p.address << " : " << p.port << "\n";
 
             // flush queued messages
-            while (!p.outgoingQueue.empty())
+            std::deque<Message> outgoingQueue;
+            if (peers.drainOutgoingQueue(p.uri, outgoingQueue))
             {
-                auto &qm = p.outgoingQueue.front();
-                client->send(hdl, qm.payload, qm.opcode);
-                std::cout << "[LOG] Sent queued message to peer " << p.id << ": " << qm.payload << "\n";
-                p.outgoingQueue.pop_front();
-                peers.updatePeer(p);
+                for (auto &qm = outgoingQueue.front())
+                {
+                    client->send(hdl, qm.payload, qm.opcode);
+                    std::cout << "[LOG] Sent queued message to peer " << p.id << ": " << qm.payload << "\n";
+                    outgoingQueue.pop_front();
+                }
+                
             }
         });
 
@@ -265,7 +270,7 @@ void Network::initServer()
     server->set_message_handler(
         [this](ConnectionHdl hdl, WsServer::message_ptr msg)
         {
-            auto con = client->get_con_from_hdl(hdl);
+            auto con = server->get_con_from_hdl(hdl);
             if (!con || !con->get_uri())
             {
                 std::cout << "[WARN] Connection handle has no URI (early failure). Skipping.\n";
@@ -456,7 +461,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     return;
                 }
                 int isTxPresent = tangle.addTransaction(newTx, 1);
-                Transaction tx = tangle.transactions[newTx.data.transaction_id];
+                Transaction tx = tangle.getTransaction(newTx.data.transaction_id);
                 // check if the receiver is same as the host node.
                 if (isTxPresent == 0)
                 {
@@ -467,7 +472,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                 {
                     cout << "[LOG] Transaction already exists in Tangle. Updating it." << endl;
 
-                    broadcastTransaction(tangle.transactions[tx.data.transaction_id]);
+                    broadcastTransaction(tangle.getTransaction(tx.data.transaction_id));
                 }
                 if (isTxPresent == 2)
                 {
@@ -488,7 +493,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                         tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
                                                                                // Update the transaction in Tangle
                     }
-                    broadcastTransaction(tangle.transactions[newTx.data.transaction_id]);
+                    broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
                 }
             }
             // double signed transaction
@@ -511,7 +516,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                 }
 
                 int isTxPresent = tangle.addTransaction(newTx, 1);
-                Transaction tx = tangle.transactions[newTx.data.transaction_id];
+                Transaction tx = tangle.getTransaction(newTx.data.transaction_id);
                 // check if the receiver is same as the host node.
                 if (isTxPresent == 0)
                 {
@@ -521,7 +526,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                 if (isTxPresent == 1)
                 {
                     cout << "[LOG] Transaction already exists in Tangle. Updating it." << endl;
-                    broadcastTransaction(tangle.transactions[newTx.data.transaction_id]);
+                    broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
                 }
                 else
                 {
@@ -531,7 +536,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
 
                     tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
 
-                    broadcastTransaction(tangle.transactions[newTx.data.transaction_id]);
+                    broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
                 }
             }
         }
@@ -671,9 +676,8 @@ void Network::sendMessage(const string &message, const string &messageType, Peer
         //     cout << "[LOG][SEND] Sent message to peer: " << fullMessage << endl;
         //     return;
         // }
-
-        peer.outgoingQueue.push_back({fullMessage, websocketpp::frame::opcode::text});
-        peers.updatePeer(peer); // Update peer state with queued message
+        peers.enqueueMessage(peer.uri, {fullMessage, websocketpp::frame::opcode::text});
+        
         // connectWebSocket(peer);
 
         std::cout << "[LOG][SEND] Message queued for peer: " << peer.id << " at " << peer.address << ":" << peer.port << endl;

@@ -131,3 +131,20 @@ Peer Peers::getRandomPeer()
 
 	return it->second;
 }
+void Peers::enqueueMessage(const std::string &uri, Message &qm)
+{
+	std::lock_guard<std::mutex> lock(peersMutex_);
+	auto it = peers_.find(uri);
+	if (it != peers_.end())
+		it->second.outgoingQueue.push_back(qm);
+}
+bool Peers::drainOutgoingQueue(const std::string &uri, std::deque<Message> &outQ)
+{
+	std::lock_guard<std::mutex> lock(peersMutex_);
+	auto it = peers_.find(uri);
+	if (it == peers_.end())
+		return false;
+	outQ = it->second.outgoingQueue;
+
+	return true;
+}
