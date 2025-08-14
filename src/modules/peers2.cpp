@@ -144,7 +144,7 @@ bool Peers::drainOutgoingQueue(const std::string &uri, std::deque<Message> &outQ
 	auto it = peers_.find(uri);
 	if (it == peers_.end())
 		return false;
-	outQ = it->second.outgoingQueue;
+	outQ.swap(it->second.outgoingQueue);
 
 	return true;
 }
