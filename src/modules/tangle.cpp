@@ -324,7 +324,7 @@ void Tangle::updateFromSerialized(const string &data)
         {
             newTx.data.parents.push_back(prevTx);
         }
-        DebugScopedLock<mutex> lock(tangleMutex);
+        DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
         // Add the new transaction to the Tangle
         transactions[newTx.data.transaction_id] = newTx;
         lastTx = newTx; // Keep track of the last transaction for cumulative weight updates
@@ -338,7 +338,7 @@ void Tangle::updateFromSerialized(const string &data)
 // function to check if tx is already present in the tangle
 bool Tangle::transactionPresent(Transaction &tx)
 {
-    DebugScopedLock<mutex> lock(tangleMutex);
+    DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
 
     // Check if the transaction ID exists in the Tangle's transactions
     return transactions.find(tx.data.transaction_id) != transactions.end();
