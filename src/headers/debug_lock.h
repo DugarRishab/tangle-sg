@@ -2,32 +2,61 @@
 #pragma once
 #include <mutex>
 #include <chrono>
-#include <iostream>
 #include <thread>
+#include <iostream>
+#include <atomic>
+#include <sstream>
 
-template <typename M>
-class TimedLock
+struct LockStats
+{
+	// optional global counter for debug
+	static std::atomic<int> total_locks;
+};
+std::atomic<int> LockStats::total_locks{0};
+
+template <typename Mutex>
+class DebugScopedLock
 {
 public:
-	TimedLock(M &m, const char *name, long warn_ms = 20)
-		: m_(m), name_(name)
+	DebugScopedLock(Mutex &m, const char *name, long warn_ms = 10)
+		: m_(m), name_(name), warn_ms_(warn_ms)
 	{
-		auto start = std::chrono::steady_clock::now();
+		auto tid = std::this_thread::get_id();
+		auto t0 = std::chrono::steady_clock::now();
 		m_.lock();
-		auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(
-						  std::chrono::steady_clock::now() - start)
-						  .count();
-		if (waited > warn_ms)
-		{
-			std::cerr << "[LOCK-WAIT] " << name_ << " waited " << waited
-					  << "ms in thread " << std::this_thread::get_id() << std::endl;
-		}
+		auto t1 = std::chrono::steady_clock::now();
+		waited_ms_ = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+		owner_acq_time_ = t1;
+		LockStats::total_locks.fetch_add(1, std::memory_order_relaxed);
+
+		std::ostringstream ss;
+		ss << "[LOCK-ACQ] " << name_ << " by thread " << tid
+		   << " waited " << waited_ms_ << " ms\n";
+		std::cerr << ss.str() << std::flush;
 	}
-	~TimedLock() { m_.unlock(); }
+
+	~DebugScopedLock()
+	{
+		auto tid = std::this_thread::get_id();
+		auto t2 = std::chrono::steady_clock::now();
+		auto held_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - owner_acq_time_).count();
+
+		std::ostringstream ss;
+		ss << "[LOCK-REL] " << name_ << " by thread " << tid
+		   << " held " << held_ms << " ms\n";
+		std::cerr << ss.str() << std::flush;
+
+		m_.unlock();
+	}
+
+	// disable copy
+	DebugScopedLock(const DebugScopedLock &) = delete;
+	DebugScopedLock &operator=(const DebugScopedLock &) = delete;
 
 private:
-	M &m_;
+	Mutex &m_;
 	const char *name_;
-	TimedLock(const TimedLock &) = delete;
-	TimedLock &operator=(const TimedLock &) = delete;
+	long warn_ms_;
+	std::chrono::steady_clock::time_point owner_acq_time_;
+	long waited_ms_;
 };
