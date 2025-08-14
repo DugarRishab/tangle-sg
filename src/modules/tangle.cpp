@@ -139,7 +139,7 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weigh
     transactions[transaction_id].metadata.lastUpdated = time(nullptr);
     // Update cumulative weight for all parents
    
-    // updateCumulativeWeightOfParents(transactions[transaction_id].data.parents, weightIncrement);
+    updateCumulativeWeightOfParents(transactions[transaction_id].data.parents, weightIncrement);
 }
 
 string Tangle::serializeTransactionData(const Transaction &tx)
@@ -406,7 +406,7 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
                 if (weightIncrement > 0){
                     it->second.metadata.cumulative_weight += weightIncrement;
                     it->second.metadata.lastUpdated = tx.metadata.lastUpdated;
-                    // updateCumulativeWeightOfParents(it->second.data.parents, weightIncrement);
+                    updateCumulativeWeightOfParents(it->second.data.parents, weightIncrement);
                 }
                 
             }
