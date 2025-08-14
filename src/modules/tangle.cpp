@@ -89,7 +89,7 @@ int Tangle::addTransaction( Transaction &tx, int update)
     else if (update)
     {
         std::cout << "[LOG] Transaction already exists in Tangle. Updating it: " << tx.data.transaction_id << endl;
-        int updated = updateTransaction(tx);
+        int updated = updateTransaction(tx, 1);
         return updated; // Transaction updated
     }
     else{
@@ -379,12 +379,13 @@ bool Tangle::transactionNeedsUpdate(Transaction &tx)
 }
 
 // Function to only update the metadata of a transaction in the Tangle
-int Tangle::updateTransaction(Transaction &tx)
+int Tangle::updateTransaction(Transaction &tx, int no_lock)
 {
     // only update cumulative weight and last updated time
     // lock_guard<mutex> lock(tangleMutex);
     // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
-    std::unique_lock lock(tangleMutex);
+    if(no_lock == 0)
+        std::unique_lock lock(tangleMutex);
 
     auto it = transactions.find(tx.data.transaction_id);
     if (it != transactions.end())
@@ -429,3 +430,4 @@ int Tangle::updateTransaction(Transaction &tx)
         return -1;
     }
 }
+

@@ -26,7 +26,7 @@ public:
     
     bool transactionPresent( Transaction& tx);
     bool transactionNeedsUpdate(Transaction &tx);
-    int updateTransaction(Transaction &tx);
+    int updateTransaction(Transaction &tx, int no_lock = 0); // Updates the metadata of a transaction in the Tangle
 
 
 
