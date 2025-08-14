@@ -82,9 +82,9 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
                         std::deque<Message> outgoingQueue;
                         if (peers.drainOutgoingQueue(peer.uri, outgoingQueue))
                         {
-                            for (auto &qm = outgoingQueue.front())
+                            for (auto &qm : outgoingQueue.front())
                             {
-                                client->send(hdl, qm.payload, qm.opcode);
+                                client->send(peer.client_hdl, qm.payload, qm.opcode);
                                 std::cout << "[LOG] Sent queued message to peer " << peer.id << ": " << qm.payload << "\n";
                                 outgoingQueue.pop_front();
                             }
@@ -180,7 +180,7 @@ void Network::initClient()
             std::deque<Message> outgoingQueue;
             if (peers.drainOutgoingQueue(p.uri, outgoingQueue))
             {
-                for (auto &qm = outgoingQueue.front())
+                for (auto &qm : outgoingQueue.front())
                 {
                     client->send(hdl, qm.payload, qm.opcode);
                     std::cout << "[LOG] Sent queued message to peer " << p.id << ": " << qm.payload << "\n";
@@ -331,7 +331,7 @@ void Network::printLastTransaction()
     Transaction lastTx;
     time_t latestTimestamp = time(nullptr); // Initialize to current time
 
-    for (const auto &pair : tangle.transactions)
+    for (auto &pair : tangle.getAllTransactions())
     {
         if (pair.second.data.timestamp > latestTimestamp)
         {
@@ -676,7 +676,8 @@ void Network::sendMessage(const string &message, const string &messageType, Peer
         //     cout << "[LOG][SEND] Sent message to peer: " << fullMessage << endl;
         //     return;
         // }
-        peers.enqueueMessage(peer.uri, {fullMessage, websocketpp::frame::opcode::text});
+        Message msg = {fullMessage, websocketpp::frame::opcode::text};
+        peers.enqueueMessage(peer.uri, msg);
         
         // connectWebSocket(peer);
 

@@ -28,7 +28,7 @@ Transaction Tangle::getTransaction(std::string &transaction_id)
     }
 }
 
-std::unordered_map<std::string, Transaction> Tangle::getAllTransctions()
+std::unordered_map<std::string, Transaction> Tangle::getAllTransactions()
 {
     lock_guard<mutex> lock(tangleMutex);
 
