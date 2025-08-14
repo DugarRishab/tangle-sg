@@ -11,7 +11,7 @@ class Tangle
 {
 public:
     Transaction getTransaction(std::string &transaction_id); // Retrieves a transaction by its ID
-    std::unordered_map<std::string, Transaction> getAllTransctions();
+    std::unordered_map<std::string, Transaction> getAllTransactions();
     Transaction addNewTransaction(Transaction &tx);
     int addTransaction( Transaction& tx, int update = 0);
     void updateCumulativeWeightOfParents(vector<std::string> &parents, int weightIncrement = 1);
