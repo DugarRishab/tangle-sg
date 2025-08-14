@@ -18,6 +18,7 @@
 
 #include "../headers/network.h"
 #include "../headers/tangle.h"
+#include "../headers/debug_lock.h"
 
 using namespace std;
 
@@ -31,7 +32,8 @@ Peers::~Peers()
 
 int Peers::addPeer(Peer &peer)
 {
-	std::lock_guard<std::mutex> lock(peersMutex_);
+	// std::lock_guard<std::mutex> lock(peersMutex_);
+	DebugScopedLock<std::mutex> lock(peersMutex_, "peersMutex_", 10);
 	auto it = peers_.find(peer.uri);
 	if (it != peers_.end())
 	{
@@ -47,7 +49,8 @@ int Peers::addPeer(Peer &peer)
 
 int Peers::removePeer(const std::string &uri)
 {
-	std::lock_guard<std::mutex> lock(peersMutex_);
+	// std::lock_guard<std::mutex> lock(peersMutex_);
+	DebugScopedLock<std::mutex> lock(peersMutex_, "peersMutex_", 10);
 	auto it = peers_.find(uri);
 	if (it != peers_.end())
 	{
@@ -62,7 +65,7 @@ int Peers::removePeer(const std::string &uri)
 int Peers::updatePeer(Peer &peer)
 {
 
-	std::lock_guard<std::mutex> lock(peersMutex_);
+	DebugScopedLock<std::mutex> lock(peersMutex_, "peersMutex_", 10);
 	auto it = peers_.find(peer.uri);
 	if (it != peers_.end())
 	{
@@ -76,7 +79,7 @@ int Peers::updatePeer(Peer &peer)
 
 Peer Peers::getPeer(std::string uri)
 {
-	std::lock_guard<std::mutex> lock(peersMutex_);
+	DebugScopedLock<std::mutex> lock(peersMutex_, "peersMutex_", 10);
 	auto it = peers_.find(uri);
 	if (it != peers_.end())
 	{
@@ -89,13 +92,13 @@ Peer Peers::getPeer(std::string uri)
 
 int Peers::countPeers()
 {
-	std::lock_guard<std::mutex> lock(peersMutex_);
+	DebugScopedLock<std::mutex> lock(peersMutex_, "peersMutex_", 10);
 	return peers_.size(); // Return the number of peers
 }
 
 int Peers::updatePeerState(const std::string &uri, ConnectionState newState)
 {
-	std::lock_guard<std::mutex> lock(peersMutex_);
+	DebugScopedLock<std::mutex> lock(peersMutex_, "peersMutex_", 10);
 	auto it = peers_.find(uri);
 	if (it != peers_.end())
 	{
@@ -109,13 +112,13 @@ int Peers::updatePeerState(const std::string &uri, ConnectionState newState)
 
 std::unordered_map<std::string, Peer> Peers::getPeerList()
 {
-	std::lock_guard<std::mutex> lock(peersMutex_);
+	DebugScopedLock<std::mutex> lock(peersMutex_, "peersMutex_", 10);
 	return peers_;
 }
 
 Peer Peers::getRandomPeer()
 {
-	std::lock_guard<std::mutex> lock(peersMutex_);
+	DebugScopedLock<std::mutex> lock(peersMutex_, "peersMutex_", 10);
 
 	if (peers_.empty())
 	{
@@ -133,14 +136,14 @@ Peer Peers::getRandomPeer()
 }
 void Peers::enqueueMessage(const std::string &uri, Message &qm)
 {
-	std::lock_guard<std::mutex> lock(peersMutex_);
+	DebugScopedLock<std::mutex> lock(peersMutex_, "peersMutex_", 10);
 	auto it = peers_.find(uri);
 	if (it != peers_.end())
 		it->second.outgoingQueue.push_back(qm);
 }
 bool Peers::drainOutgoingQueue(const std::string &uri, std::deque<Message> &outQ)
 {
-	std::lock_guard<std::mutex> lock(peersMutex_);
+	DebugScopedLock<std::mutex> lock(peersMutex_, "peersMutex_", 10);
 	auto it = peers_.find(uri);
 	if (it == peers_.end())
 		return false;
