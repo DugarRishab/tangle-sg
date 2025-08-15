@@ -97,7 +97,7 @@ int Peers::updatePeer(Peer &peer)
 
 Peer Peers::getPeer(std::string uri)
 {
-	std::shared_lock(peersMutex_);
+	std::shared_lock lock(peersMutex_);
 	auto it = peers_.find(uri);
 	if (it != peers_.end())
 	{
@@ -111,7 +111,7 @@ Peer Peers::getPeer(std::string uri)
 
 int Peers::countPeers()
 {
-	std::shared_lock(peersMutex_);
+	std::shared_lock lock(peersMutex_);
 	return peers_.size(); // Return the number of peers
 }
 
@@ -131,13 +131,13 @@ int Peers::updatePeerState(const std::string &uri, ConnectionState newState)
 
 std::unordered_map<std::string, Peer> Peers::getPeerList()
 {
-	std::shared_lock(peersMutex_);
+	std::shared_lock lock(peersMutex_);
 	return peers_;
 }
 
 Peer Peers::getRandomPeer()
 {
-	std::shared_lock(peersMutex_);
+	std::shared_lock lock(peersMutex_);
 
 	if (peers_.empty())
 	{
