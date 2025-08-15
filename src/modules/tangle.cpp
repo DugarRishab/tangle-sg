@@ -126,7 +126,7 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weigh
     std::unique_lock lock(tangleMutex);
 
     // std::cout << "[LOG][WEIGHT] current cumulative weight for transaction: "
-              << transaction_id << " is " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
+            //   << transaction_id << " is " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
     transactions[transaction_id].metadata.cumulative_weight += weightIncrement;
     std::cout << "[TANGLE] Cumulative weight updated for transaction: "
               << ". New cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
