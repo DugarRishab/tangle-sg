@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <openssl/hmac.h>
 #include <jsoncpp/json/json.h>
+#include <shared_mutex>
 #include "tangle.h"
 
 #include <thread>
@@ -90,7 +91,7 @@ public:
 private:
 	// std::vector<Peer> peers_;
 	std::unordered_map<std::string, Peer> peers_;
-	mutable std::mutex peersMutex_;
+	std::shared_mutex peersMutex_;
 	
 };
 

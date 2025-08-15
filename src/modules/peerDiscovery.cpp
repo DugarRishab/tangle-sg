@@ -92,6 +92,31 @@ PeerDiscovery::PeerDiscovery(int port, Network &net, Peers &peers) : port_(port)
 		  << octets[3];
 	broadcastIP = bcast.str();
 
+	// load maxPeers from environment variable
+	const char *maxPeersEnv = std::getenv("MAX_PEERS");
+	if (maxPeersEnv)
+	{
+		try
+		{
+			maxPeers_ = std::stoi(maxPeersEnv);
+			if (maxPeers_ <= 0)
+			{
+				std::cerr << "[ERROR]: MAX_PEERS must be a positive integer\n";
+				throw std::runtime_error("Invalid MAX_PEERS value");
+			}
+			std::cout << "[INFO] Max peers set to: " << maxPeers_ << "\n";
+		}
+		catch (const std::exception &e)
+		{
+			std::cerr << "[ERROR]: Invalid MAX_PEERS value: " << e.what() << "\n";
+			throw;
+		}
+	}
+	else
+	{
+		std::cout << "[INFO] MAX_PEERS not set, using default value of 5\n";
+	}
+
 	// Setup UDP socket
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
 	int opt = 1; // Enable broadcast option
@@ -215,7 +240,7 @@ bool PeerDiscovery::verifyHMAC(const Json::Value &msg)
 void PeerDiscovery::findPeers(int maxPeers, int maxTimeLimitMs)
 {
 	// Phase 1: Send PEER_REQUEST
-	std::cout << "Starting peer discovery with max " << maxPeers << " peers.\n";
+	std::cout << "[PD] Starting peer discovery with max " << maxPeers << " peers.\n";
 
 	Json::Value msg;
 	msg["type"] = "PEER_REQUEST";
@@ -224,7 +249,7 @@ void PeerDiscovery::findPeers(int maxPeers, int maxTimeLimitMs)
 	std::string payload = Json::FastWriter().write(msg);
 
 	sendUDPBroadcast(payload);
-	std::cout << "Broadcast sent: " << payload << "\n";
+	std::cout << "[PD] Broadcast sent: " << payload << "\n";
 }
 
 void PeerDiscovery::responderLoop()
@@ -232,30 +257,35 @@ void PeerDiscovery::responderLoop()
 	char buf[2048];
 	sockaddr_in sender;
 	socklen_t slen = sizeof(sender);
-	std::cout << "Responder loop started, listening for incoming packets...\n";
+	std::cout << "[PD] Responder loop started, listening for incoming packets...\n";
 
 	while (running_)
 	{
 		int n = recvfrom(sock, buf, sizeof(buf) - 1, 0, (sockaddr *)&sender, &slen);
 		if (n > 0)
 		{
-			std::cout << "Received packet from " << inet_ntoa(sender.sin_addr) << ":" << ntohs(sender.sin_port) << "\n";
+			std::cout << "[PD] Received packet from " << inet_ntoa(sender.sin_addr) << ":" << ntohs(sender.sin_port) << "\n";
 			buf[n] = '\0';
 			Json::Value msg;
 			Json::Reader r;
 			if (r.parse(buf, msg))
 			{
 				std::string type = msg["type"].asString();
-				std::cout << "Packet type: " << type << "\n";
+				std::cout << "[PD] Packet type: " << type << "\n";
 
 				if (msg["from"].asString() == UID_A)
 				{
-					std::cout << "Ignoring packet from self: " << UID_A << "\n";
+					std::cout << "[PD][WARN] Ignoring packet from self: " << UID_A << "\n";
 					continue; // Ignore packets from self
 				}
 
 				if (type == "PEER_REQUEST")
 				{
+					if (peers.countPeers() >= maxPeers_)
+					{
+						std::cout << "[PD][WARN] Max peers reached, ignoring PEER_REQUEST.\n";
+						continue; // Ignore if max peers reached
+					}
 					// generate N2 and HMAC
 					uint64_t N1 = msg["nonce_A"].asUInt64();
 					uint64_t N2 = NONCE_A;
@@ -265,7 +295,7 @@ void PeerDiscovery::responderLoop()
 					data << A_UID << B_UID << N1 << N2;
 					std::string tag2 = computeHMAC(data.str());
 
-					std::cout << "Responding to PEER_REQUEST from " << A_UID << "\n";
+					std::cout << "[PD] Responding to PEER_REQUEST from " << A_UID << "\n";
 					Json::Value resp;
 					resp["type"] = "HS_RESPONSE";
 					resp["from"] = B_UID;
@@ -274,11 +304,16 @@ void PeerDiscovery::responderLoop()
 					resp["hmac"] = tag2;
 					resp["port"] = port_;
 					std::string out = Json::FastWriter().write(resp);
-					std::cout << "Sending HS_RESPONSE: " << out << "\n";
+					std::cout << "[PD] Sending HS_RESPONSE: " << out << "\n";
 					sendUDPPacket(out, sender);
 				}
 				else if (type == "HS_ACK")
 				{
+					if(peers.countPeers() >= maxPeers_)
+					{
+						std::cout << "[PD][WARN] Max peers reached, ignoring HS_ACK.\n";
+						continue; // Ignore if max peers reached
+					}
 					// Phase 3
 					uint64_t N2 = msg["nonce_B"].asUInt64();
 					std::string A_UID = msg["from"].asString();
@@ -298,19 +333,25 @@ void PeerDiscovery::responderLoop()
 
 						if (peers.addPeer(p) == 0)
 						{
-							std::cout << "[WARN] Peer with ID " << p.uri << " already exists. Skipping.\n";
+							std::cout << "[PD][WARN] Peer with ID " << p.uri << " already exists. Skipping.\n";
 							continue; // Peer already exists
 						}
-						std::cout << "Handshake successful with peer: " << p.uri << "\n";
+						std::cout << "[PD] Handshake successful with peer: " << p.uri << "\n";
 					}
 				}
 				else if (type == "HS_RESPONSE")
 				{
-					std::cout << "HS_RESPONSE from " << msg["from"].asString() << "\n";
+					std::cout << "[PD] HS_RESPONSE from " << msg["from"].asString() << "\n";
+
+					if (peers.countPeers() >= maxPeers_)
+					{
+						std::cout << "[PD][WARN] Max peers reached, ignoring HS_RESPONSE.\n";
+						continue; // Ignore if max peers reached
+					}
 
 					if (!verifyHMAC(msg))
 					{
-						std::cerr << "[ERROR] HMAC verification failed for HS_RESPONSE from " << msg["from"].asString() << "\n";
+						std::cerr << "[PD][ERROR] HMAC verification failed for HS_RESPONSE from " << msg["from"].asString() << "\n";
 						continue;
 					}
 
@@ -321,32 +362,33 @@ void PeerDiscovery::responderLoop()
 					p.nonce = msg["nonce_B"].asUInt64();
 					p.uri = "ws://" + p.address + ":" + std::to_string(ws_port) + "/";
 
-					std::cout << "Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
+					std::cout << "[PD] Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
+
+					
 
 					if (performHandshake(p))
 					{
 						// on success, add to active list
 						net.connectWebSocket(p);
-						
 
 						if (peers.addPeer(p) == 0)
 						{
-							std::cout << "[WARN] Peer with ID " << p.uri << " already exists. Skipping.\n";
+							std::cout << "[PD][WARN] Peer with ID " << p.uri << " already exists. Skipping.\n";
 							continue; // Peer already exists
 						}
 
-						std::cout << "Peer added: " << p.id << " at " << p.address << ":" << p.port << "\n";
-						std::cout << "Total connected Peers: " << peers.countPeers() << "\n";
+						std::cout << "[PD] Peer added: " << p.id << " at " << p.address << ":" << p.port << "\n";
+						std::cout << "[PD] Total connected Peers: " << peers.countPeers() << "\n";
 					}
 					else
 					{
-						std::cout << "[discovery] Handshake FAILED with "
+						std::cout << "[PD] Handshake FAILED with "
 								  << p.id << " at " << p.address << ":" << p.port << "\n";
 					}
 				}
 				else
 				{
-					std::cout << "Ignoring non-HS_RESPONSE packet of type: " << type << "\n";
+					std::cout << "[PD] Ignoring non-HS_RESPONSE packet of type: " << type << "\n";
 				}
 			}
 		}

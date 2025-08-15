@@ -44,6 +44,8 @@ class PeerDiscovery
 		Peers &peers;
 		mutable std::mutex peersMutex_;
 
+		int maxPeers_ = 5; // Default max peers to discover
+
 		Network &net; // Reference to the Network object
 
 		std::string baseIP, broadcastIP;
