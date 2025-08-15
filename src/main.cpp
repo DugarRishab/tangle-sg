@@ -205,9 +205,15 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
     uniform_real_distribution<> energyDist(0.5, 5.0);
     uniform_real_distribution<> priceDist(0.1, 0.5);
 
+    char *txCountEnv = getenv("TX_COUNT");
+    int tx_count = txCountEnv ? atoi(txCountEnv) : 10;
+
+    char *txDelayEnv = getenv("TX_DELAY");
+    int tx_delay = txDelayEnv ? atoi(txDelayEnv) : 30;
+
     vector<int> timearray;
     int i = 0;
-    while (i < 10)
+    while (i < tx_count)
     {
         std::cout << "[SIMULATOR] Generating transaction " << i + 1 << "..." << std::endl;
         i++;
@@ -275,7 +281,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 
         net.broadcastTransaction(finalTx);
         cout << "[SIMULATOR] Transaction broadcasted completed." << endl;
-        this_thread::sleep_for(chrono::seconds(30));
+        this_thread::sleep_for(chrono::seconds(tx_delay));
     }
 
     std::this_thread::sleep_for(std::chrono::seconds(60));
