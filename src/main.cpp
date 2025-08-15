@@ -209,31 +209,31 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
     int i = 0;
     while (i < 10)
     {
-        std::cout << "[LOG][SIMULATOR] Generating transaction " << i + 1 << "..." << std::endl;
+        std::cout << "[SIMULATOR] Generating transaction " << i + 1 << "..." << std::endl;
         i++;
 
         Transaction newTx;
 
         if (peers.countPeers() == 0)
         {
-            std::cout << "[WARN] Still no peers—waiting before generating transactions…\n";
+            std::cout << "[SIMULATOR][WARN] Still no peers—waiting before generating transactions…\n";
             std::this_thread::sleep_for(std::chrono::seconds(5));
             i--;
             continue; // skip this iteration until we have at least one
         }
-        std::cout << "[SIMULATOR][TSA] Starting..." << std::endl;
+        // std::cout << "[SIMULATOR][TSA] Starting..." << std::endl;
         vector<string> parents = selectTips(tangle, 2);
-        std::cout << "[SIMULATOR][TSA] Completed." << std::endl;
+        // std::cout << "[SIMULATOR][TSA] Completed." << std::endl;
         // receiver is selected randomly from the list of active peers
         // std::cout << "[SIMULATOR][RECEIVER] Completed." << std::endl;
         // string receiver = peers.getRandomPeer().id;
         // std::cout << "[SIMULATOR][RECEIVER] Completed." << std::endl;
 
-        std::cout << "[SIMULATOR][" << std::this_thread::get_id() << "] before getRandomPeer" << std::endl
-                  << std::flush;
+        // std::cout << "[SIMULATOR][" << std::this_thread::get_id() << "] before getRandomPeer" << std::endl
+                //   << std::flush;
         string receiver = peers.getRandomPeer().id;
-        std::cout << "[SIMULATOR][" << std::this_thread::get_id() << "] after getRandomPeer" << std::endl
-                  << std::flush;
+        // std::cout << "[SIMULATOR][" << std::this_thread::get_id() << "] after getRandomPeer" << std::endl
+        //           << std::flush;
 
         newTx.data.timestamp = time(nullptr);
         newTx.data.timestampInt = static_cast<int>(time(nullptr));
@@ -253,18 +253,18 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // Add the new transaction
         Transaction finalTx = tangle.addNewTransaction(newTx);
 
-        std::cout << "[SIMULATOR][POW] starting..." << std::endl;
+        // std::cout << "[SIMULATOR][POW] starting..." << std::endl;
         performPoW(finalTx.data.transaction_id);
-        std::cout << "[SIMULATOR][POW] over" << std::endl;
+        // std::cout << "[SIMULATOR][POW] over" << std::endl;
 
-        cout << "[LOG][SIMULATOR] Generated new transaction: "
+        cout << "[SIMULATOR] Generated new transaction: "
              << finalTx.data.transaction_id << " at:" << finalTx.data.timestamp << endl;
 
         auto end = chrono::high_resolution_clock::now();
         auto elapsed = duration<double, milli>(end - start).count();
 
-        cout << "[LOG][SIMULATOR] Transaction " << finalTx.data.transaction_id << " added to Tangle." << endl;
-        cout << "[LOG][SIMULATOR] Time elapsed:" << elapsed << " ms" << endl;
+        cout << "[SIMULATOR] Transaction " << finalTx.data.transaction_id << " added to Tangle." << endl;
+        cout << "[SIMULATOR] Time elapsed:" << elapsed << " ms" << endl;
 
         // auto finalDataSerialized = Tangle::serializeTransaction(finalTx);
         // auto finalDataDeSerialized = Tangle::deserializeTransaction(finalDataSerialized);
@@ -274,14 +274,14 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // testSignaturePipeline(finalTx);
 
         net.broadcastTransaction(finalTx);
-        cout << "[LOG][SIMULATOR] Transaction broadcasted completed." << endl;
+        cout << "[SIMULATOR] Transaction broadcasted completed." << endl;
         this_thread::sleep_for(chrono::seconds(30));
     }
 
     std::this_thread::sleep_for(std::chrono::seconds(60));
     saveTangleToCSV(tangle.getAllTransactions(), "tangle_state.csv");
 
-    throw std::runtime_error("[LOG] Tangle state saved to tangle_state.txt. Exiting simulation.");
+    throw std::runtime_error("[SIMULATOR] Tangle state saved to tangle_state.txt. Exiting simulation.");
 }
 
 std::string loadOrCreateHMACSecret(const std::string &path)

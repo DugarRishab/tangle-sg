@@ -83,12 +83,12 @@ int Tangle::addTransaction( Transaction &tx, int update)
     {
         transactions[tx.data.transaction_id] = tx;
 
-        std::cout << "[LOG] Transaction added to Tangle: " << tx.data.transaction_id << endl;
+        std::cout << "[TANGLE] Transaction added to Tangle: " << tx.data.transaction_id << endl;
         return 2; // Transaction added
     }
     else if (update)
     {
-        std::cout << "[LOG] Transaction already exists in Tangle. Updating it: " << tx.data.transaction_id << endl;
+        std::cout << "[TANGLE] Transaction already exists in Tangle. Updating it: " << tx.data.transaction_id << endl;
         int updated = updateTransaction(tx, 1);
         return updated; // Transaction updated
     }
@@ -113,7 +113,7 @@ void Tangle::updateCumulativeWeightOfParents(vector<std::string> &parents, int w
         }
         else
         {
-            std::cerr << "[ERROR] Parent transaction " << parent << " not found in Tangle." << std::endl;
+            std::cerr << "[TANGLE][ERROR] Parent transaction " << parent << " not found in Tangle." << std::endl;
         }
     }
 }
@@ -125,10 +125,10 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weigh
     // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
     std::unique_lock lock(tangleMutex);
 
-    std::cout << "[LOG][WEIGHT] current cumulative weight for transaction: "
+    // std::cout << "[LOG][WEIGHT] current cumulative weight for transaction: "
               << transaction_id << " is " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
     transactions[transaction_id].metadata.cumulative_weight += weightIncrement;
-    std::cout << "[LOG] Cumulative weight updated for transaction: "
+    std::cout << "[TANGLE] Cumulative weight updated for transaction: "
               << ". New cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
 
     if(transactions.find(transaction_id) == transactions.end())
@@ -369,7 +369,7 @@ bool Tangle::transactionNeedsUpdate(Transaction &tx)
         }
 
         // Check if the new transaction is newer than the existing one
-        std::cout << "[LOG][UPDATE] received last update time: "
+        std::cout << "[TANGLE][UPDATE] received last update time: "
                   << tx.metadata.lastUpdated << " existing last update time: "
                   << it->second.metadata.lastUpdated << std::endl;
         return tx.metadata.lastUpdated > it->second.metadata.lastUpdated;
@@ -412,13 +412,13 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
             }
             
 
-            std::cout << "[LOG] Transaction updated in Tangle: " << tx.data.transaction_id << endl;
+            std::cout << "[TANGLE] Transaction updated in Tangle: " << tx.data.transaction_id << endl;
 
             return 1; // Transaction updated
         }
         else
         {
-            std::cout << "[LOG] Transaction not updated in Tangle: " << tx.data.transaction_id
+            std::cout << "[TANGLE][WARN] Transaction not updated in Tangle: " << tx.data.transaction_id
                       << ". Existing transaction is newer." << endl;
 
             return 0;
@@ -426,7 +426,7 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
     }
     else
     {
-        cerr << "[ERROR] Transaction not found in Tangle for update: " << tx.data.transaction_id << endl;
+        cerr << "[TANGLE][ERROR] Transaction not found in Tangle for update: " << tx.data.transaction_id << endl;
         return -1;
     }
 }

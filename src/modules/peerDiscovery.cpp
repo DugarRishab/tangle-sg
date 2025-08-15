@@ -53,7 +53,7 @@ PeerDiscovery::PeerDiscovery(int port, Network &net, Peers &peers) : port_(port)
 	const char *ip_base = std::getenv("BASE_IP");
 	if (!ip_base)
 	{
-		std::cerr << "ERROR: BASE_IP environment variable not set\n";
+		std::cerr << "[ERROR]: BASE_IP environment variable not set\n";
 		throw std::runtime_error("BASE_IP not set");
 	}
 	baseIP = ip_base;
@@ -73,13 +73,13 @@ PeerDiscovery::PeerDiscovery(int port, Network &net, Peers &peers) : port_(port)
 		}
 		catch (...)
 		{
-			std::cerr << "ERROR: Invalid BASE_IP format: " << baseIP << "\n";
+			std::cerr << "[ERROR]: Invalid BASE_IP format: " << baseIP << "\n";
 			throw std::runtime_error("Invalid BASE_IP format");
 		}
 	}
 	if (octets.size() != 4)
 	{
-		std::cerr << "ERROR: BASE_IP must have 4 octets: " << baseIP << "\n";
+		std::cerr << "[ERROR]: BASE_IP must have 4 octets: " << baseIP << "\n";
 		throw std::runtime_error("Invalid BASE_IP format");
 	}
 

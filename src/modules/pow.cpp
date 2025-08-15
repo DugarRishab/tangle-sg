@@ -17,7 +17,7 @@ std::string sha256(const std::string& input) {
 }
 std::string performPoW(const std::string& data) {
     int difficulty = 2; // Set the difficulty level
-    std::cout << "Performing PoW for: " << data << std::endl;
+    std::cout << "[POW] Performing PoW for: " << data << std::endl;
     // TODO: calculate time for POW
 
 

@@ -85,7 +85,7 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
                             for (auto &qm : outgoingQueue)
                             {
                                 client->send(peer.client_hdl, qm.payload, qm.opcode);
-                                std::cout << "[LOG] Sent queued message to peer " << peer.id << ": " << qm.payload << "\n";
+                                std::cout << "[MONITOR] Sent queued message to peer " << peer.id << ": " << qm.payload << "\n";
                                 outgoingQueue.pop_front();
                             }
                         }
@@ -162,7 +162,7 @@ void Network::initClient()
             auto con = client->get_con_from_hdl(hdl);
             if (!con || !con->get_uri())
             {
-                std::cout << "[WARN] Connection handle has no URI (early failure). Skipping.\n";
+                std::cout << "[CLIENT][WARN] Connection handle has no URI (early failure). Skipping.\n";
                 return;
             }
             std::string uri = con->get_uri()->str();
@@ -173,7 +173,7 @@ void Network::initClient()
             p.retryCount = 0;
             peers.updatePeer(p);
 
-            std::cout << "[LOG] WebSocket connection OPENED with peer "
+            std::cout << "[CLIENT] WebSocket connection OPENED with peer "
                       << p.id << " at " << p.address << " : " << p.port << "\n";
 
             // flush queued messages
@@ -183,7 +183,7 @@ void Network::initClient()
                 for (auto &qm : outgoingQueue)
                 {
                     client->send(hdl, qm.payload, qm.opcode);
-                    std::cout << "[LOG] Sent queued message to peer " << p.id << ": " << qm.payload << "\n";
+                    std::cout << "[CLIENT] Sent queued message to peer " << p.id << ": " << qm.payload << "\n";
                     outgoingQueue.pop_front();
                 }
                 
@@ -196,14 +196,14 @@ void Network::initClient()
             auto con = client->get_con_from_hdl(hdl);
             if (!con || !con->get_uri())
             {
-                std::cout << "[WARN] Connection handle has no URI (early failure). Skipping.\n";
+                std::cout << "[CLIENT][WARN] Connection handle has no URI (early failure). Skipping.\n";
                 return;
             }
             std::string uri = con->get_uri()->str();
             Peer p = peers.getPeer(uri);
 
-            std::cout << "[LOG] PACKET FROM URI: " << con->get_uri()->str() << "\n";
-            std::cout << "[LOG] Received message from peer " << p.id << " at " << p.address << " : " << p.port << "\n";
+            // std::cout << "[CLIENT] PACKET FROM URI: " << con->get_uri()->str() << "\n";
+            // std::cout << "[CLIENT] Received message from peer " << p.id << " at " << p.address << " : " << p.port << "\n";
             handleIncomingMessage(p, msg->get_payload());
         });
 
@@ -214,12 +214,12 @@ void Network::initClient()
             auto con = client->get_con_from_hdl(hdl);
             if (!con || !con->get_uri())
             {
-                std::cout << "[WARN] Connection handle has no URI (early failure). Skipping.\n";
+                std::cout << "[CLIENT][WARN] Connection handle has no URI (early failure). Skipping.\n";
                 return;
             }
             std::string uri = con->get_uri()->str();
             Peer p = peers.getPeer(uri);
-            std::cout << "[ERROR] WebSocket connection failed with peer " << p.id << " at " << p.address << " : " << p.port << "\n";
+            std::cout << "[CLIENT][ERROR] WebSocket connection failed with peer " << p.id << " at " << p.address << " : " << p.port << "\n";
             p.state = ConnectionState::FAILED;
             scheduleReconnect(p);
         });
@@ -231,12 +231,12 @@ void Network::initClient()
             auto con = client->get_con_from_hdl(hdl);
             if (!con || !con->get_uri())
             {
-                std::cout << "[WARN] Connection handle has no URI (early failure). Skipping.\n";
+                std::cout << "[CLIENT][WARN] Connection handle has no URI (early failure). Skipping.\n";
                 return;
             }
             std::string uri = con->get_uri()->str();
             Peer p = peers.getPeer(uri);
-            std::cout << "[LOG] WebSocket connection closed with peer " << p.id << " at " << p.address << " : " << p.port << "\n";
+            std::cout << "[CLIENT] WebSocket connection closed with peer " << p.id << " at " << p.address << " : " << p.port << "\n";
             p.state = ConnectionState::CLOSED;
             scheduleReconnect(p);
         });
@@ -257,13 +257,13 @@ void Network::initServer()
             auto con = server->get_con_from_hdl(hdl);
             if (!con || !con->get_uri())
             {
-                std::cout << "[WARN] Connection handle has no URI (early failure). Skipping.\n";
+                std::cout << "[SERVER][WARN] Connection handle has no URI (early failure). Skipping.\n";
                 return;
             }
             std::string uri = con->get_uri()->str();
             Peer p = peers.getPeer(uri);
 
-            std::cout << "[LOG] New WebSocket connection from peer" << p.id << " at " << p.address << " : " << p.port << "\n";
+            std::cout << "[SERVER] New WebSocket connection from peer" << p.id << " at " << p.address << " : " << p.port << "\n";
             // new connection opened
             // TODO: Save the hdl as server_hdl in the peer
         });
@@ -273,13 +273,13 @@ void Network::initServer()
             auto con = server->get_con_from_hdl(hdl);
             if (!con || !con->get_uri())
             {
-                std::cout << "[WARN] Connection handle has no URI (early failure). Skipping.\n";
+                std::cout << "[SERVER][WARN] Connection handle has no URI (early failure). Skipping.\n";
                 return;
             }
             std::string uri = con->get_uri()->str();
             Peer p = peers.getPeer(uri);
 
-            std::cout << "[LOG] Received message from peer " << p.id << " at " << p.address << " : " << p.port << "\n";
+            // std::cout << "[SERVER] Received message from peer " << p.id << " at " << p.address << " : " << p.port << "\n";
 
             handleIncomingMessage(p, msg->get_payload());
         });
@@ -296,11 +296,11 @@ void Network::scheduleReconnect(Peer &peer)
     {
         peer.retryCount++;
         peer.nextRetry = std::chrono::steady_clock::now() + std::chrono::seconds(2 * peer.retryCount);
-        std::cout << "[LOG] Scheduling reconnect for peer " << peer.id << " in " << 2 * peer.retryCount << " seconds.\n";
+        std::cout << "[SCHEDULE] Scheduling reconnect for peer " << peer.id << " in " << 2 * peer.retryCount << " seconds.\n";
     }
     else
     {
-        std::cout << "[ERROR] Max retry limit reached for peer " << peer.id << ". Giving up.\n";
+        std::cout << "[SCHEDULE][ERROR] Max retry limit reached for peer " << peer.id << ". Giving up.\n";
         peer.state = ConnectionState::FAILED;
     }
     peers.updatePeer(peer);
@@ -408,18 +408,18 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
             // Verify checksum
             if (verifyChecksum(data, checksum))
             {
-                cout << "[LOG] Received valid Tangle update from peer." << endl;
+                cout << "[HANDLER] Received valid message from peer." << endl;
                 // handleTCPClient(data + " " + checksum, tangle);
             }
             else
             {
-                cerr << "[ERROR] Checksum verification failed for received Tangle data." << endl;
+                cerr << "[HANDLER][ERROR] Checksum verification failed for received message data." << endl;
                 return;
             }
         }
         else
         {
-            cerr << "[ERROR] Failed to parse JSON message: " << errs << endl;
+            cerr << "[HANDLER][ERROR] Failed to parse JSON message: " << errs << endl;
             return;
         }
 
@@ -429,20 +429,20 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
             string checksum = jsonData["checksum"].asString();
             string timestamp = jsonData["timestamp"].asString();
 
-            cout << "[LOG] Received new transaction from peer: " << message << endl;
+            cout << "[HANDLER] Received new transaction from peer: " << message << endl;
             // Handle new transaction
             Transaction newTx = Tangle::deserializeTransaction(data);
 
             // TODO: check sign status of tx
             if (newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
             {
-                cerr << "[ERROR] Transaction is not signed. Cannot add to Tangle." << endl;
+                cerr << "[HANDLER][ERROR] Transaction is not signed. Cannot add to Tangle." << endl;
                 return;
             }
             // single signed transaction
             else if (!newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
             {
-                cout << "[LOG] Transaction is only single signed." << endl;
+                cout << "[HANDLER] Transaction is only single signed." << endl;
 
                 // TODO: if the transaction is only signed by sender,
                 // add transaction to Tangle but perform PoW later
@@ -451,13 +451,13 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
 
                 if (verifyTransaction(txSearialized, sig_b64, newTx.data.sender)) // Verify signature 1 is sender's signature
                 {
-                    cout << "[LOG] Transaction is signed by sender." << endl;
+                    cout << "[HANDLER] Transaction is signed by sender." << endl;
                     // If the transaction is only signed by sender, we can add it to the Tangle
                     // but we need to perform PoW later
                 }
                 else
                 {
-                    cerr << "[ERROR] Transaction signature 1 verification failed for sender." << endl;
+                    cerr << "[HANDLER][ERROR] Transaction signature 1 verification failed for sender." << endl;
                     return;
                 }
                 int isTxPresent = tangle.addTransaction(newTx, 1);
@@ -465,25 +465,25 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                 // check if the receiver is same as the host node.
                 if (isTxPresent == 0)
                 {
-                    cout << "[LOG] Transaction already exists in Tangle. No Updates. Not broadcasting." << endl;
+                    cout << "[HANDLER] Transaction already exists in Tangle. No Updates. Not broadcasting." << endl;
                     return;
                 }
                 if (isTxPresent == 1)
                 {
-                    cout << "[LOG] Transaction already exists in Tangle. Updating it." << endl;
+                    cout << "[HANDLER] Transaction already exists in Tangle. Updating it." << endl;
 
                     broadcastTransaction(tangle.getTransaction(tx.data.transaction_id));
                 }
                 if (isTxPresent == 2)
                 {
-                    cout << "[LOG] Transaction added to Tangle. Broadcasting." << endl;
+                    cout << "[HANDLER] Transaction added to Tangle. Broadcasting." << endl;
 
                     const std::string uid = getenv("UID");
                     // If yes, that means this node (the host node) is the receiver and must doubly sign the transaction
                     if (tx.data.receiver == uid) // If receiver is the host node
                     {
                         // verify tx data against own meter data -> not possible here in docknet
-                        cout << "[LOG] Transaction is for this node. Double signing it." << endl;
+                        cout << "[HANDLER] Transaction is for this node. Double signing it." << endl;
                         // Sign the transaction with the receiver's signature
                         tx.metadata.signature2 = signTransaction(txSearialized);
                         // perform PoW on the transaction
@@ -507,11 +507,11 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                 if (verifyTransaction(txSearialized, sig1_b64, newTx.data.sender) &&
                     verifyTransaction(txSearialized, sig2_b64, newTx.data.receiver)) // Verify both signatures
                 {
-                    cout << "[LOG] Transaction is double signed by sender and receiver. Adding to Tangle." << endl;
+                    cout << "[HANDLER] Transaction is double signed by sender and receiver. Adding to Tangle." << endl;
                 }
                 else
                 {
-                    cerr << "[ERROR] Transaction signature verification failed." << endl;
+                    cerr << "[HANDLER][ERROR] Transaction signature verification failed." << endl;
                     return;
                 }
 
@@ -520,17 +520,17 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                 // check if the receiver is same as the host node.
                 if (isTxPresent == 0)
                 {
-                    cout << "[LOG] Transaction already exists in Tangle. No Updates. Not broadcasting." << endl;
+                    cout << "[HANDLER] Transaction already exists in Tangle. No Updates. Not broadcasting." << endl;
                     return;
                 }
                 if (isTxPresent == 1)
                 {
-                    cout << "[LOG] Transaction already exists in Tangle. Updating it." << endl;
+                    cout << "[HANDLER] Transaction already exists in Tangle. Updating it." << endl;
                     broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
                 }
                 else
                 {
-                    cout << "LOG] Transaction added to Tangle. Broadcasting." << endl;
+                    cout << "[HANDLER] Transaction added to Tangle. Broadcasting." << endl;
                     // perform PoW on the transaction
                     performPoW(tx.data.transaction_id);
 
@@ -542,13 +542,13 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
         }
         if (messageType == "SYNC_REQ")
         {
-            cout << "[LOG] Received SYNC_REQ from peer. Sending Tangle data." << endl;
+            cout << "[HANDLER] Received SYNC_REQ from peer. Sending Tangle data." << endl;
             // Respond with Tangle data
             sendTangle(peer);
         }
         if (messageType == "SYNC_ACK")
         {
-            cout << "[LOG] Received SYNC_ACK from peer. Tangle data synchronized." << endl;
+            cout << "[HANDLER] Received SYNC_ACK from peer. Tangle data synchronized." << endl;
             // TODO: accept tangle data from peer
             string data = jsonData["data"].asString();
             string checksum = jsonData["checksum"].asString();
@@ -567,7 +567,7 @@ void Network::broadcastTransaction(const Transaction &Tx)
 {
     // Serialize the transaction
     string message = Tangle::serializeTransaction(Tx);
-    std::cout << "[LOG] Broadcasting new transaction: " << Tx.data.transaction_id << endl;
+    std::cout << "[SEND] Broadcasting new transaction: " << Tx.data.transaction_id << endl;
     // std::cout << "[LOG] Transaction data: " << message << endl;
 
     string checksum = computeChecksum(message);
@@ -601,7 +601,7 @@ void Network::sendTangle(Peer &peer)
 
     sendMessage(jsonString, "SYNC_ACK", peer);
 
-    cout << "[LOG][SYNC_ACK] Sent Tangle to peer ." << endl;
+    cout << "[SYNC_ACK] Sent Tangle to peer ." << endl;
 }
 // TODO: sendSyncRequest() function
 
@@ -623,7 +623,7 @@ bool Network::connectWebSocket(Peer &peer)
         peers.updatePeerState(peer.uri, ConnectionState::FAILED);
         peer.state = ConnectionState::FAILED;
 
-        std::cerr << "[ERROR][CONNECT_WS] Websocket connection NOT established with peer "
+        std::cerr << "[CONNECT_WS][ERROR] Websocket connection NOT established with peer "
                   << peer.id << " at " << peer.address << " : " << peer.port << ". Reason: " << ec.message() << '\n';
         return false;
     }
@@ -637,14 +637,14 @@ bool Network::connectWebSocket(Peer &peer)
         peers.updatePeer(peer);
         client->connect(con);
 
-        std::cout << "[LOG][CONNECT_WS] Websocket connected to peer: " << peer.id << " at " << peer.address << ":" << peer.port << "\n";
+        std::cout << "[CONNECT_WS] Websocket connected to peer: " << peer.id << " at " << peer.address << ":" << peer.port << "\n";
         return true; // Connection initiated successfully
     }
     catch (const std::exception &e)
     {
         peer.state = ConnectionState::FAILED;
         peers.updatePeer(peer);
-        std::cerr << "[ERROR][CONNECT_WS] Websocket connection NOT established with peer"
+        std::cerr << "[CONNECT_WS][ERROR] Websocket connection NOT established with peer"
                   << peer.id << " at " << peer.address << " : " << peer.port << ". Reason: " << e.what() << '\n';
         return false; // Connection initiation failed
     }
@@ -681,10 +681,10 @@ void Network::sendMessage(const string &message, const string &messageType, Peer
         
         // connectWebSocket(peer);
 
-        std::cout << "[LOG][SEND] Message queued for peer: " << peer.id << " at " << peer.address << ":" << peer.port << endl;
+        std::cout << "[SEND] Message queued for peer: " << peer.id << " at " << peer.address << ":" << peer.port << endl;
     }
     catch (const std::exception &e)
     {
-        std::cerr << "[ERROR][SEND MESSAGE]" << e.what() << '\n';
+        std::cerr << "[SEND][ERROR]" << e.what() << '\n';
     }
 }
