@@ -230,7 +230,7 @@ string Tangle::serializeTransaction(const Transaction &tx)
     ss << ",[";
     for (size_t i = 0; i < tx.metadata.hops.size(); i++)
     {
-        ss << "(" << tx.metadata.hops[i].first << "," << tx.metadata.hops[i].second << ")";
+        ss << "(" << tx.metadata.hops[i].first << ":" << tx.metadata.hops[i].second << ")";
         if (i < tx.metadata.hops.size() - 1)
             ss << ",";
     }
@@ -330,12 +330,13 @@ Transaction Tangle::deserializeTransaction(const string &data)
 
     while (getline(hopsStream, hop, ','))
     {
-        size_t pos = hop.find(',');
-        if (pos != string::npos)
+        hop = hop.substr(1, hop.size() - 2); // Remove parentheses
+        size_t colonPos = hop.find(':');
+        if (colonPos != string::npos)
         {
-            int64_t timestamp = std::stoll(hop.substr(0, pos));
-            string peerId = hop.substr(pos + 1);
-            tx.metadata.hops.emplace_back(timestamp, peerId);
+            int64_t timestamp = std::stoll(hop.substr(0, colonPos));
+            string uid = hop.substr(colonPos + 1);
+            tx.metadata.hops.emplace_back(timestamp, uid);
         }
     }
 
