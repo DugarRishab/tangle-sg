@@ -19,6 +19,8 @@
 #include <ctime>   // time_t, time()
 #include <iomanip> // for std::quoted
 
+#include <modules/telemetry.cpp>
+
 using namespace std;
 using namespace chrono;
 namespace fs = std::filesystem;
@@ -300,7 +302,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
     std::this_thread::sleep_for(std::chrono::seconds(60));
     saveTangleToCSV(tangle.getAllTransactions(), "tangle_state.csv");
 
-    throw std::runtime_error("[SIMULATOR] Tangle state saved to tangle_state.txt. Exiting simulation.");
+    // throw std::runtime_error("[SIMULATOR] Tangle state saved to tangle_state.txt. Exiting simulation.");
 }
 
 std::string loadOrCreateHMACSecret(const std::string &path)
@@ -433,6 +435,10 @@ int main()
 
     PeerDiscovery pd(9001, net, peers); // 9001 is for UDP discovery
 
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+
+    startTelemetryCollector(1000);
+
     // Create genesis transaction (without PoW initially)
 
     tx_data genesisData = {
@@ -499,8 +505,28 @@ int main()
     std::thread simulationThread(simWrapper);
 
     // Join the threads to keep the main function active
-    serverThread.join();
     simulationThread.join();
+
+    stopTelemetryCollector();
+    auto metrics_snapshot = snapshotAndClearMetrics();
+
+    std::string nodeId = uid;
+
+    const std::string endpoint = "http://127.0.0.1:8000/api/telemetry";
+
+    bool ok = sendTelemetry(endpoint, nodeId, tangle, peers, metrics_snapshot);
+    if (!ok)
+    {
+        std::cerr << "Telemetry upload failed\n";
+    }
+    else
+    {
+        std::cout << "Telemetry uploaded successfully\n";
+    }
+
+    curl_global_cleanup();
+
+    serverThread.join();
 
     return 0;
 }
