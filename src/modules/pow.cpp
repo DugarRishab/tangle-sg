@@ -21,20 +21,20 @@ std::string performPoW(const std::string& data) {
     // TODO: calculate time for POW
 
 
-    // int nonce = 0;
-    // const int MAX_ATTEMPTS = 1e8;  // Avoid infinite loops
-    // while (nonce < MAX_ATTEMPTS) {
-    //     std::string attempt = data + std::to_string(nonce);
-    //     std::string hash = sha256(attempt);
-    //     // std::cout << "[POW] Trying nonce: " << nonce << " Hash: " << hash << std::endl;
-    //     if (hash.substr(0, difficulty) == std::string(difficulty, '0')) {
-    //         std::cout << "PoW solved for " << data << " at nonce: " << nonce << std::endl;
-    //         return hash;
-    //     }
-    //     nonce++;
-    // }
-    // std::cerr << "PoW failed: max attempts reached for " << data << std::endl;
-    // return "INVALID_POW";
+    int nonce = 0;
+    const int MAX_ATTEMPTS = 1e8;  // Avoid infinite loops
+    while (nonce < MAX_ATTEMPTS) {
+        std::string attempt = data + std::to_string(nonce);
+        std::string hash = sha256(attempt);
+        // std::cout << "[POW] Trying nonce: " << nonce << " Hash: " << hash << std::endl;
+        if (hash.substr(0, difficulty) == std::string(difficulty, '0')) {
+            std::cout << "PoW solved for " << data << " at nonce: " << nonce << std::endl;
+            return hash;
+        }
+        nonce++;
+    }
+    std::cerr << "PoW failed: max attempts reached for " << data << std::endl;
+    return "INVALID_POW";
 
-    return "POW_NOT_IMPLEMENTED"; // Placeholder return value
+    // return "POW_NOT_IMPLEMENTED"; // Placeholder return value
 }
