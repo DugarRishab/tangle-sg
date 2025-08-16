@@ -1,3 +1,8 @@
+
+#include <../headers/telemetry.h>
+#include <../headers/tangle.h>
+#include <../headers/peers2.h>
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -8,10 +13,6 @@
 #include <atomic>
 #include <chrono>
 #include <iomanip>
-
-#include "headers/peers2.h"
-#include "headers/tangle.h"
-#include "headers/tangle.h"
 
 #include <curl/curl.h>
 #include <jsoncpp/json/json.h>

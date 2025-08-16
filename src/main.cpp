@@ -19,7 +19,7 @@
 #include <ctime>   // time_t, time()
 #include <iomanip> // for std::quoted
 
-#include <modules/telemetry.cpp>
+#include <headers/telemetry.h>
 
 using namespace std;
 using namespace chrono;
