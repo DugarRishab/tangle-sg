@@ -30,8 +30,6 @@ static std::string now_iso8601()
 	return ss.str();
 }
 
-
-
 static std::string slurp(const std::string &path)
 {
 	std::ifstream f(path);
@@ -202,7 +200,7 @@ static std::atomic<bool> g_collect_running(false);
 static std::thread g_collector_thread;
 
 // Start collector: spawns a background thread to sample metrics every interval_ms
-inline void startTelemetryCollector(int interval_ms)
+void startTelemetryCollector(int interval_ms)
 {
 	if (g_collect_running.load())
 		return;
@@ -221,7 +219,7 @@ inline void startTelemetryCollector(int interval_ms)
 }
 
 // Stop and join collector
-inline void stopTelemetryCollector()
+void stopTelemetryCollector()
 {
 	if (!g_collect_running.load())
 		return;
@@ -231,7 +229,7 @@ inline void stopTelemetryCollector()
 }
 
 // Snapshot and clear collected metrics (thread-safe)
-inline std::vector<MetricSample> snapshotAndClearMetrics()
+std::vector<MetricSample> snapshotAndClearMetrics()
 {
 	std::vector<MetricSample> v;
 	{
@@ -394,7 +392,7 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 	for (const auto &m : metrics)
 	{
 		Json::Value m_obj(Json::objectValue);
-		m_obj["ts"] = m.ts;	
+		m_obj["ts"] = m.ts;
 		m_obj["cpu_percent"] = m.cpu_percent;
 		m_obj["ram_total_mb"] = Json::UInt64(m.ram_total_mb);
 		m_obj["ram_used_mb"] = Json::UInt64(m.ram_used_mb);
@@ -403,7 +401,7 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 
 		metrics_arr.append(m_obj);
 	}
-	
+
 	root["metrics"] = metrics_arr;
 
 	// writer
@@ -416,12 +414,12 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 // This builds payload (pulls transactions + peers internally from provided objects),
 // and posts JSON to endpoint with provided api_key.
 
-inline bool sendTelemetry(const std::string &endpoint,
+bool sendTelemetry(const std::string &endpoint,
 
-						  const std::string &nodeId,
-						  Tangle &tangle,
-						  Peers &peers,
-						  std::vector<MetricSample> &metrics)
+				   const std::string &nodeId,
+				   Tangle &tangle,
+				   Peers &peers,
+				   std::vector<MetricSample> &metrics)
 {
 	std::string payload = buildTelemetryPayloadJson(nodeId, tangle, peers, metrics);
 
