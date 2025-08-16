@@ -30,15 +30,7 @@ static std::string now_iso8601()
 	return ss.str();
 }
 
-struct MetricSample
-{
-	std::string ts;
-	double cpu_percent = 0.0;
-	uint64_t ram_total_mb = 0;
-	uint64_t ram_used_mb = 0;
-	uint64_t net_bytes_sent = 0; // delta since last sample
-	uint64_t net_bytes_recv = 0; // delta since last sample
-};
+
 
 static std::string slurp(const std::string &path)
 {
@@ -210,7 +202,7 @@ static std::atomic<bool> g_collect_running(false);
 static std::thread g_collector_thread;
 
 // Start collector: spawns a background thread to sample metrics every interval_ms
-inline void startTelemetryCollector(int interval_ms = 1000)
+inline void startTelemetryCollector(int interval_ms)
 {
 	if (g_collect_running.load())
 		return;
@@ -345,9 +337,9 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 		jtx["timestamp"] = std::to_string(tx.data.timestamp); // if timestamp is time_t
 		jtx["sender"] = tx.data.sender;
 		jtx["receiver"] = tx.data.receiver;
-		jtx["amount"] = Json::Value((Json::Float)tx.data.amount);
+		jtx["amount"] = tx.data.amount;
 		jtx["unit"] = tx.data.unit;
-		jtx["price_per_unit"] = Json::Value((Json::Float)tx.data.price_per_unit);
+		jtx["price_per_unit"] = tx.data.price_per_unit;
 		jtx["currency"] = tx.data.currency;
 
 		// metadata
@@ -390,7 +382,7 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 		p["port"] = peer.port;
 		p["uri"] = peer.uri;
 
-		p["state"] = peer.state; // assuming status is a string
+		p["state"] = static_cast<int>(peer.state); // assuming status is a string
 
 		peersList_arr.append(p);
 	}
