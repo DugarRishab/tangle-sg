@@ -67,7 +67,10 @@ Transaction Tangle::addNewTransaction(Transaction &tx)
     // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
     std::unique_lock lock(tangleMutex);
 
-    tx.metadata.hops.emplace_back({timeNow(), getenv("UID")}); // Add hop with current timestamp and UID
+    const char *env_uid = std::getenv("UID");
+    std::string uid_str = env_uid ? env_uid : "";
+
+    tx.metadata.hops.emplace_back({timeNow(), uid_str}); // Add hop with current timestamp and UID
 
     transactions[tx.data.transaction_id] = tx;
 
@@ -84,7 +87,10 @@ int Tangle::addTransaction(Transaction &tx, int update)
     auto it = transactions.find(tx.data.transaction_id);
     if (it == transactions.end())
     {
-        tx.metadata.hops.push_back({timeNow(), getenv("UID")}); // Add hop with current timestamp and UID
+        const char *env_uid = std::getenv("UID");
+        std::string uid_str = env_uid ? env_uid : "";
+
+        tx.metadata.hops.emplace_back({timeNow(), uid_str}); // Add hop with current timestamp and UID
         transactions[tx.data.transaction_id] = tx;
 
         std::cout << "[TANGLE] Transaction added to Tangle: " << tx.data.transaction_id << endl;
@@ -221,7 +227,7 @@ string Tangle::serializeTransaction(const Transaction &tx)
     ss << "]";
 
     // serialize hops
-    s << ",[";
+    ss << ",[";
     for (size_t i = 0; i < tx.metadata.hops.size(); i++)
     {
         ss << "(" << tx.metadata.hops[i].first << "," << tx.metadata.hops[i].second << ")";
