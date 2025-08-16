@@ -70,7 +70,7 @@ Transaction Tangle::addNewTransaction(Transaction &tx)
     const char *env_uid = std::getenv("UID");
     std::string uid_str = env_uid ? env_uid : "";
 
-    tx.metadata.hops.emplace_back({timeNow(), uid_str}); // Add hop with current timestamp and UID
+    tx.metadata.hops.emplace_back(timeNow(), uid_str); // Add hop with current timestamp and UID
 
     transactions[tx.data.transaction_id] = tx;
 
@@ -90,7 +90,7 @@ int Tangle::addTransaction(Transaction &tx, int update)
         const char *env_uid = std::getenv("UID");
         std::string uid_str = env_uid ? env_uid : "";
 
-        tx.metadata.hops.emplace_back({timeNow(), uid_str}); // Add hop with current timestamp and UID
+        tx.metadata.hops.emplace_back(timeNow(), uid_str); // Add hop with current timestamp and UID
         transactions[tx.data.transaction_id] = tx;
 
         std::cout << "[TANGLE] Transaction added to Tangle: " << tx.data.transaction_id << endl;
