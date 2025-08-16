@@ -1,7 +1,7 @@
 
-#include <../headers/telemetry.h>
-#include <../headers/tangle.h>
-#include <../headers/peers2.h>
+#include "../headers/telemetry.h"
+#include "../headers/tangle.h"
+#include "../headers/peers2.h"
 
 #include <iostream>
 #include <fstream>
