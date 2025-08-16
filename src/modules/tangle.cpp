@@ -1,5 +1,6 @@
 #include "../headers/tangle.h"
 #include "../headers/transaction.h"
+#include "../headers/utils.h"
 #include <iostream>
 #include <sstream>
 #include <ctime>
@@ -66,7 +67,7 @@ Transaction Tangle::addNewTransaction(Transaction &tx)
     // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
     std::unique_lock lock(tangleMutex);
 
-    tx.metadata.hops.push_back({timeNow(), getenv("UID")}); // Add hop with current timestamp and UID
+    tx.metadata.hops.emplace_back({timeNow(), getenv("UID")}); // Add hop with current timestamp and UID
 
     transactions[tx.data.transaction_id] = tx;
 
@@ -217,7 +218,7 @@ string Tangle::serializeTransaction(const Transaction &tx)
         if (i < tx.data.parents.size() - 1)
             ss << ",";
     }
-    ss << "]"
+    ss << "]";
 
     // serialize hops
     s << ",[";
