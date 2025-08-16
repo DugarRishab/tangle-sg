@@ -312,8 +312,8 @@ Transaction Tangle::deserializeTransaction(const string &data)
     // --- Deserialize parents ---
     std::string parentsStr;
     getline(ss, parentsStr, ']'); // read until the closing bracket
-    if (!parentsStr.empty() && parentsStr[0] == ',')
-        parentsStr = parentsStr.substr(2); // skip ",["
+    if (!parentsStr.empty())
+        parentsStr = parentsStr.substr(1); // skip "["
 
     std::stringstream parentsStream(parentsStr);
     std::string parent;
@@ -327,7 +327,7 @@ Transaction Tangle::deserializeTransaction(const string &data)
     // --- Deserialize hops ---
     std::string hopsStr;
     getline(ss, hopsStr, ']'); // read until closing bracket of hops
-    if (!hopsStr.empty() && hopsStr[0] == ',')
+    if (!hopsStr.empty())
         hopsStr = hopsStr.substr(2); // skip ",["
 
     std::stringstream hopsStream(hopsStr);
