@@ -382,15 +382,15 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 
 	// peersList
 	Json::Value peersList_arr(Json::arrayValue);
-	for (const auto &[id, p] : peersList)
+	for (const auto &[id, peer] : peersList)
 	{
 		Json::Value p(Json::objectValue);
-		p["id"] = p.id;
-		p["address"] = p.address;
-		p["port"] = p.port;
-		p["uri"] = p.uri;
+		p["id"] = peer.id;
+		p["address"] = peer.address;
+		p["port"] = peer.port;
+		p["uri"] = peer.uri;
 
-		p["state"] = p.state; // assuming status is a string
+		p["state"] = peer.state; // assuming status is a string
 
 		peersList_arr.append(p);
 	}
