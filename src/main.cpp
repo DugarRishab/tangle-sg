@@ -273,7 +273,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
              << newTx.data.transaction_id << " at:" << newTx.data.timestamp << endl;
 
         auto end = timeNow();
-        auto elapsed = tsaStartTime - end;
+        auto elapsed = end - tsaStartTime;
 
         newTx.metadata.completionDuration = elapsed;
         newTx.metadata.powDuration = powEndTime - powStartTime;
