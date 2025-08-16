@@ -330,6 +330,9 @@ Transaction Tangle::deserializeTransaction(const string &data)
 
     while (getline(hopsStream, hop, ','))
     {
+        if (hop.size() < 2)
+            continue;
+            
         hop = hop.substr(1, hop.size() - 2); // Remove parentheses
         size_t colonPos = hop.find(':');
         if (colonPos != string::npos)
