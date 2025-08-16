@@ -8,6 +8,8 @@
 #include <iostream>
 #include <stdexcept> // for std::runtime_error
 #include <iterator> // for std::istreambuf_iterator
+#include <chrono>
+#include <cstdint>
 
 using namespace std;
 
@@ -58,4 +60,10 @@ std::vector<unsigned char> from_base64(const std::string &b64)
 	}
 	bin.resize(bin_len);
 	return bin;
+}
+
+int64_t timeNow()
+{
+	using namespace std::chrono;
+	return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
 }

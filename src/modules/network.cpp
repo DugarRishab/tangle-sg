@@ -18,6 +18,7 @@
 #include "../headers/peers2.h"
 #include "../headers/pow.h"
 #include "../headers/transaction.h"
+#include "../headers/utils.h"
 #include <json/json.h>
 
 #include <websocketpp/config/asio_no_tls.hpp>
@@ -488,7 +489,10 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                         tx.metadata.signature2 = signTransaction(txSearialized);
                         // perform PoW on the transaction
                         performPoW(tx.data.transaction_id);
-                        tx.metadata.lastUpdated = std::time(nullptr);
+                        tx.metadata.lastUpdated = timeNow();
+                        tx.metadata.verificationTimestamp = timeNow();
+                        tx.metadata.verificationDuration = timeNow() - tx.data.timestamp;
+                        
                         tangle.updateTransaction(tx);
                         tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
                                                                                // Update the transaction in Tangle

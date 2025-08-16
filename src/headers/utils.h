@@ -15,4 +15,6 @@ void write_file(const std::string &path, const std::vector<unsigned char> &data)
 std::string to_base64(const unsigned char *bin, size_t len);
 std::vector<unsigned char> from_base64(const std::string &b64);
 
+int64_t timeNow(); // Returns current UTC time in milliseconds since epoch
+
 #endif

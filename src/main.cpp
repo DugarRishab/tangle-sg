@@ -228,7 +228,9 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
             continue; // skip this iteration until we have at least one
         }
         // std::cout << "[SIMULATOR][TSA] Starting..." << std::endl;
+        int64_t tsaStartTime = timeNow();
         vector<string> parents = selectTips(tangle, 2);
+        int64_t tsaEndTime = timeNow();
         // std::cout << "[SIMULATOR][TSA] Completed." << std::endl;
         // receiver is selected randomly from the list of active peers
         // std::cout << "[SIMULATOR][RECEIVER] Completed." << std::endl;
@@ -241,7 +243,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // std::cout << "[SIMULATOR][" << std::this_thread::get_id() << "] after getRandomPeer" << std::endl
         //           << std::flush;
 
-        newTx.data.timestamp = time(nullptr);
+        newTx.data.timestamp = timeNow(); // Use current time in seconds
         newTx.data.timestampInt = static_cast<int>(time(nullptr));
         newTx.data.sender = getenv("UID"); // Use UID from environment variable
         newTx.data.receiver = receiver;
@@ -250,36 +252,47 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         newTx.data.price_per_unit = priceDist(gen);
         newTx.data.currency = "USD";
         newTx.data.parents = parents;
-        newTx.metadata.lastUpdated = time(nullptr);
+        newTx.metadata.lastUpdated = timeNow();
         newTx.metadata.cumulative_weight = 0; // Initialize cumulative weight
-
-        auto start = chrono::high_resolution_clock::now();
+        newTx.metadata.tsaDuration = tsaEndTime - tsaStartTime;
+        newTx.metadata.powDuration = 0; // Placeholder, will be set after PoW
+        
         // Compute PoW for new transaction
 
         // Add the new transaction
-        Transaction finalTx = tangle.addNewTransaction(newTx);
-
+        newTx = tangle.addNewTransaction(newTx);
+        
         // std::cout << "[SIMULATOR][POW] starting..." << std::endl;
-        performPoW(finalTx.data.transaction_id);
-        // std::cout << "[SIMULATOR][POW] over" << std::endl;
+        int64_t powStartTime = timeNow();
+        performPoW(newTx.data.transaction_id);
+        int64_t powEndTime = timeNow();
+        
+        // std::ut << "[SIMULATOR][POW] over" << std::endl;
 
         cout << "[SIMULATOR] Generated new transaction: "
-             << finalTx.data.transaction_id << " at:" << finalTx.data.timestamp << endl;
+             << newTx.data.transaction_id << " at:" << newTx.data.timestamp << endl;
 
-        auto end = chrono::high_resolution_clock::now();
-        auto elapsed = duration<double, milli>(end - start).count();
+        auto end = timeNow();
+        auto elapsed = tsaStartTime - end;
 
-        cout << "[SIMULATOR] Transaction " << finalTx.data.transaction_id << " added to Tangle." << endl;
+        newTx.metadata.completionDuration = elapsed;
+        newTx.metadata.powDuration = powEndTime - powStartTime;
+
+        tangle.updateTransaction(newTx); // Update the transaction in the Tangle
+
+        newTx = tangle.getTransaction(newTx.data.transaction_id);
+
+        cout << "[SIMULATOR] Transaction " << newTx.data.transaction_id << " added to Tangle." << endl;
         cout << "[SIMULATOR] Time elapsed:" << elapsed << " ms" << endl;
 
-        // auto finalDataSerialized = Tangle::serializeTransaction(finalTx);
+        // auto finalDataSerialized = Tangle::serializeTransaction(newTx);
         // auto finalDataDeSerialized = Tangle::deserializeTransaction(finalDataSerialized);
 
-        // check if finalDataDeSerialized matches with finalTx and print where the mismatch is
+        // check if finalDataDeSerialized matches with newTx and print where the mismatch is
 
-        // testSignaturePipeline(finalTx);
+        // testSignaturePipeline(newTx);
 
-        net.broadcastTransaction(finalTx);
+        net.broadcastTransaction(newTx);
         cout << "[SIMULATOR] Transaction broadcasted completed." << endl;
         this_thread::sleep_for(chrono::seconds(tx_delay));
     }

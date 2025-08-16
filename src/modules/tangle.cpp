@@ -66,11 +66,13 @@ Transaction Tangle::addNewTransaction(Transaction &tx)
     // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
     std::unique_lock lock(tangleMutex);
 
+    tx.metadata.hops.push_back({timeNow(), getenv("UID")}); // Add hop with current timestamp and UID
+
     transactions[tx.data.transaction_id] = tx;
 
     return tx;
 }
-int Tangle::addTransaction( Transaction &tx, int update)
+int Tangle::addTransaction(Transaction &tx, int update)
 {
     // Lock the mutex to protect shared Tangle access
     // lock_guard<mutex> lock(tangleMutex);
@@ -81,6 +83,7 @@ int Tangle::addTransaction( Transaction &tx, int update)
     auto it = transactions.find(tx.data.transaction_id);
     if (it == transactions.end())
     {
+        tx.metadata.hops.push_back({timeNow(), getenv("UID")}); // Add hop with current timestamp and UID
         transactions[tx.data.transaction_id] = tx;
 
         std::cout << "[TANGLE] Transaction added to Tangle: " << tx.data.transaction_id << endl;
@@ -92,7 +95,8 @@ int Tangle::addTransaction( Transaction &tx, int update)
         int updated = updateTransaction(tx, 1);
         return updated; // Transaction updated
     }
-    else{
+    else
+    {
         // dont even update. update = 0
         return 0; // Transaction already exists, no update
     }
@@ -105,9 +109,7 @@ void Tangle::updateCumulativeWeightOfParents(vector<std::string> &parents, int w
         if (transactions.find(parent) != transactions.end())
         {
             transactions[parent].metadata.cumulative_weight += weightIncrement;
-            transactions[parent].metadata.lastUpdated = time(nullptr);
-
-            
+            transactions[parent].metadata.lastUpdated = timeNow();
 
             updateCumulativeWeightOfParents(transactions[parent].data.parents, weightIncrement);
         }
@@ -126,19 +128,19 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weigh
     std::unique_lock lock(tangleMutex);
 
     // std::cout << "[LOG][WEIGHT] current cumulative weight for transaction: "
-            //   << transaction_id << " is " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
+    //   << transaction_id << " is " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
     transactions[transaction_id].metadata.cumulative_weight += weightIncrement;
     std::cout << "[TANGLE] Cumulative weight updated for transaction: "
               << ". New cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
 
-    if(transactions.find(transaction_id) == transactions.end())
+    if (transactions.find(transaction_id) == transactions.end())
     {
         std::cerr << "[ERROR] Transaction " << transaction_id << " not found in Tangle." << std::endl;
         return;
     }
-    transactions[transaction_id].metadata.lastUpdated = time(nullptr);
+    transactions[transaction_id].metadata.lastUpdated = timeNow();
     // Update cumulative weight for all parents
-   
+
     updateCumulativeWeightOfParents(transactions[transaction_id].data.parents, weightIncrement);
 }
 
@@ -198,9 +200,16 @@ string Tangle::serializeTransaction(const Transaction &tx)
        << tx.metadata.lastUpdated << ","
        << tx.metadata.signature1 << ","
        << tx.metadata.signature2 << ","
-       << tx.metadata.checksum;
+       << tx.metadata.checksum << ","
+       << tx.metadata.consensusTimestamp << ","
+       << tx.metadata.consensusDuration << ","
+       << tx.metadata.verificationTimestamp << ","
+       << tx.metadata.verificationDuration << ","
+       << tx.metadata.powDuration << ","
+       << tx.metadata.tsaDuration << ","
+       << tx.metadata.completionDuration;
 
-    // Serialize previous transactions
+    // Serialize parents
     ss << ",[";
     for (size_t i = 0; i < tx.data.parents.size(); i++)
     {
@@ -208,7 +217,16 @@ string Tangle::serializeTransaction(const Transaction &tx)
         if (i < tx.data.parents.size() - 1)
             ss << ",";
     }
-    ss << "]";
+    ss << "]"
+
+    // serialize hops
+    s << ",[";
+    for (size_t i = 0; i < tx.metadata.hops.size(); i++)
+    {
+        ss << "(" << tx.metadata.hops[i].first << "," << tx.metadata.hops[i].second << ")";
+        if (i < tx.metadata.hops.size() - 1)
+            ss << ",";
+    }
 
     return ss.str();
 }
@@ -262,6 +280,27 @@ Transaction Tangle::deserializeTransaction(const string &data)
 
     getline(ss, tx.metadata.checksum, ',');
 
+    getline(ss, line, ',');
+    tx.metadata.consensusTimestamp = std::stoll(line);
+
+    getline(ss, line, ',');
+    tx.metadata.consensusDuration = std::stoll(line);
+
+    getline(ss, line, ',');
+    tx.metadata.verificationTimestamp = std::stoll(line);
+
+    getline(ss, line, ',');
+    tx.metadata.verificationDuration = std::stoll(line);
+
+    getline(ss, line, ',');
+    tx.metadata.powDuration = std::stoll(line);
+
+    getline(ss, line, ',');
+    tx.metadata.tsaDuration = std::stoll(line);
+
+    getline(ss, line, ',');
+    tx.metadata.completionDuration = std::stoll(line);
+
     // Deserialize previous transactions
     string prevTxStr;
     getline(ss, prevTxStr);
@@ -273,6 +312,24 @@ Transaction Tangle::deserializeTransaction(const string &data)
 
     while (getline(prevTxStream, prevTx, ','))
         tx.data.parents.push_back(prevTx);
+
+    // Deserialize hops
+    string hopsStr;
+    getline(ss, hopsStr);
+    hopsStr = hopsStr.substr(1, hopsStr.size() - 2); // Remove brackets
+    stringstream hopsStream(hopsStr);
+    string hop;
+
+    while (getline(hopsStream, hop, ','))
+    {
+        size_t pos = hop.find(',');
+        if (pos != string::npos)
+        {
+            int64_t timestamp = std::stoll(hop.substr(0, pos));
+            string peerId = hop.substr(pos + 1);
+            tx.metadata.hops.emplace_back(timestamp, peerId);
+        }
+    }
 
     return tx;
 }
@@ -384,7 +441,7 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
     // only update cumulative weight and last updated time
     // lock_guard<mutex> lock(tangleMutex);
     // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
-    if(no_lock == 0)
+    if (no_lock == 0)
         std::unique_lock lock(tangleMutex);
 
     auto it = transactions.find(tx.data.transaction_id);
@@ -393,24 +450,23 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
         if (it->second.metadata.lastUpdated < tx.metadata.lastUpdated)
         {
 
-            if (it->second.metadata.signature2.empty()){
+            if (it->second.metadata.signature2.empty())
+            {
                 it->second.metadata.signature2 = tx.metadata.signature2;
                 it->second.metadata.lastUpdated = tx.metadata.lastUpdated;
             }
-                
 
             if (!it->second.metadata.signature2.empty() && !it->second.metadata.signature1.empty())
             {
                 // allow weight updates only if both signatures are present
                 int weightIncrement = tx.metadata.cumulative_weight - it->second.metadata.cumulative_weight;
-                if (weightIncrement > 0){
+                if (weightIncrement > 0)
+                {
                     it->second.metadata.cumulative_weight += weightIncrement;
                     it->second.metadata.lastUpdated = tx.metadata.lastUpdated;
                     updateCumulativeWeightOfParents(it->second.data.parents, weightIncrement);
                 }
-                
             }
-            
 
             std::cout << "[TANGLE] Transaction updated in Tangle: " << tx.data.transaction_id << endl;
 
@@ -430,4 +486,3 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
         return -1;
     }
 }
-
