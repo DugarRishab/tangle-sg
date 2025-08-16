@@ -234,6 +234,7 @@ string Tangle::serializeTransaction(const Transaction &tx)
         if (i < tx.metadata.hops.size() - 1)
             ss << ",";
     }
+    ss << "]";
 
     return ss.str();
 }
