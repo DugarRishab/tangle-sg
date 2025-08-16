@@ -16,7 +16,11 @@ std::string sha256(const std::string& input) {
     return ss.str();
 }
 std::string performPoW(const std::string& data) {
-    int difficulty = 2; // Set the difficulty level
+    // get the difficulty level from environment variable or use default
+    const char* difficultyEnv = getenv("POW");
+    int difficulty = difficultyEnv ? atoi(difficultyEnv) : 3; // Default difficulty is 3
+
+    // int difficulty = 3; // Set the difficulty level
     std::cout << "[POW] Performing PoW for: " << data << std::endl;
     // TODO: calculate time for POW
 
