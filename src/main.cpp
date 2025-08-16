@@ -18,6 +18,7 @@
 #include <cstdlib> // getenv, setenv, rand
 #include <ctime>   // time_t, time()
 #include <iomanip> // for std::quoted
+#include <curl/curl.h>
 
 #include "headers/telemetry.h"
 
