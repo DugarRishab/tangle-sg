@@ -513,7 +513,7 @@ int main()
 
     std::string nodeId = uid;
 
-    const std::string endpoint = "http://127.0.0.1:8000/api/telemetry";
+    const std::string endpoint = "http://172.25.0.10:8000/api/telemetry";
 
     bool ok = sendTelemetry(endpoint, nodeId, tangle, peers, metrics_snapshot);
     if (!ok)
