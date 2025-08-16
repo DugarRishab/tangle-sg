@@ -309,40 +309,44 @@ Transaction Tangle::deserializeTransaction(const string &data)
     getline(ss, line, ',');
     tx.metadata.completionDuration = std::stoll(line);
 
-    // Deserialize previous transactions
-    string prevTxStr;
-    getline(ss, prevTxStr);
+    // --- Deserialize parents ---
+    std::string parentsStr;
+    getline(ss, parentsStr, ']'); // read until the closing bracket
+    if (!parentsStr.empty() && parentsStr[0] == ',')
+        parentsStr = parentsStr.substr(2); // skip ",["
 
-    // Remove brackets and split by semicolon
-    prevTxStr = prevTxStr.substr(1, prevTxStr.size() - 2); // Remove brackets
-    stringstream prevTxStream(prevTxStr);
-    string prevTx;
+    std::stringstream parentsStream(parentsStr);
+    std::string parent;
 
-    while (getline(prevTxStream, prevTx, ','))
-        tx.data.parents.push_back(prevTx);
+    while (getline(parentsStream, parent, ','))
+    {
+        if (!parent.empty())
+            tx.data.parents.push_back(parent);
+    }
 
-    // Deserialize hops
-    string hopsStr;
-    getline(ss, hopsStr);
-    hopsStr = hopsStr.substr(1, hopsStr.size() - 2); // Remove brackets
-    stringstream hopsStream(hopsStr);
-    string hop;
+    // --- Deserialize hops ---
+    std::string hopsStr;
+    getline(ss, hopsStr, ']'); // read until closing bracket of hops
+    if (!hopsStr.empty() && hopsStr[0] == ',')
+        hopsStr = hopsStr.substr(2); // skip ",["
+
+    std::stringstream hopsStream(hopsStr);
+    std::string hop;
 
     while (getline(hopsStream, hop, ','))
     {
-        if (hop.size() < 2)
-            continue;
-            
-        hop = hop.substr(1, hop.size() - 2); // Remove parentheses
-        size_t colonPos = hop.find(':');
-        if (colonPos != string::npos)
+        if (hop.size() >= 3 && hop.front() == '(' && hop.back() == ')')
         {
-            int64_t timestamp = std::stoll(hop.substr(0, colonPos));
-            string uid = hop.substr(colonPos + 1);
-            tx.metadata.hops.emplace_back(timestamp, uid);
+            hop = hop.substr(1, hop.size() - 2); // strip ( )
+            size_t colonPos = hop.find(':');
+            if (colonPos != std::string::npos)
+            {
+                int64_t timestamp = std::stoll(hop.substr(0, colonPos));
+                std::string uid = hop.substr(colonPos + 1);
+                tx.metadata.hops.emplace_back(timestamp, uid);
+            }
         }
     }
-
     return tx;
 }
 
