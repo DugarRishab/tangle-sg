@@ -397,28 +397,21 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 	root["peers"] = peersList_arr;
 
 	// metrics: split into cpu, ram, net arrays
-	Json::Value cpu_arr(Json::arrayValue), ram_arr(Json::arrayValue), net_arr(Json::arrayValue);
+	Json::Value metrics_arr(Json::arrayValue);
 	for (const auto &m : metrics)
 	{
-		Json::Value c(Json::objectValue);
-		c["ts"] = m.ts;
-		c["value"] = m.cpu_percent;
-		cpu_arr.append(c);
+		Json::Value m_obj(Json::objectValue);
+		m_obj["ts"] = m.ts;	
+		m_obj["cpu_percent"] = m.cpu_percent;
+		m_obj["ram_total_mb"] = Json::UInt64(m.ram_total_mb);
+		m_obj["ram_used_mb"] = Json::UInt64(m.ram_used_mb);
+		m_obj["net_bytes_sent"] = Json::UInt64(m.net_bytes_sent);
+		m_obj["net_bytes_recv"] = Json::UInt64(m.net_bytes_recv);
 
-		Json::Value r(Json::objectValue);
-		r["ts"] = m.ts;
-		r["value_mb"] = Json::UInt64(m.ram_used_mb);
-		ram_arr.append(r);
-
-		Json::Value n(Json::objectValue);
-		n["ts"] = m.ts;
-		n["bytes_sent"] = Json::UInt64(m.net_bytes_sent);
-		n["bytes_recv"] = Json::UInt64(m.net_bytes_recv);
-		net_arr.append(n);
+		metrics_arr.append(m_obj);
 	}
-	root["cpu"] = cpu_arr;
-	root["ram"] = ram_arr;
-	root["net"] = net_arr;
+	
+	root["metrics"] = metrics_arr;
 
 	// writer
 	Json::StreamWriterBuilder w;
