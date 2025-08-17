@@ -30,6 +30,14 @@ const std::string KEYFILE_PRIV = "keys/node.key";
 const std::string KEYFILE_PUB = "keys/node.pub";
 const std::string HMAC_SECRET_FILE = "secret/hmac_secret.txt";
 
+static std::atomic<bool> g_running{true};
+
+void signalHandler(int signo)
+{
+    // safe: set atomic flag to false
+    g_running.store(false);
+}
+
 // Join a vector of strings by a delimiter
 static std::string join(const std::vector<std::string> &v, char delim = ';')
 {
@@ -378,6 +386,10 @@ int main()
         return 1;
     }
 
+    // install signal handlers early to handle graceful shutdown
+    std::signal(SIGINT, signalHandler);
+    std::signal(SIGTERM, signalHandler);
+
     fs::create_directories("keys");
 
     std::vector<unsigned char> pk(crypto_sign_PUBLICKEYBYTES);
@@ -515,11 +527,8 @@ int main()
 
     const std::string endpoint = "http://172.25.0.10:8000/api/telemetry";
 
-
     const char *run_env = getenv("RUN_ID");
     int runId = run_env ? atoi(run_env) : 0;
-
-    
 
     bool ok = sendTelemetry(endpoint, nodeId, tangle, peers, metrics_snapshot, runId);
     if (!ok)
@@ -530,6 +539,17 @@ int main()
     {
         std::cout << "Telemetry uploaded successfully\n";
     }
+
+    std::cout << "[MAIN] Simulation finished. Network and peer discovery remain active.\n";
+    std::cout << "[MAIN] Press Ctrl+C to stop and shutdown cleanly.\n";
+
+    while (g_running.load())
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        // Optional: periodic tasks, health checks etc.
+    }
+
+    std::cout << "[MAIN] Shutdown requested — stopping modules...\n";
 
     curl_global_cleanup();
 
