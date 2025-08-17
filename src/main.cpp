@@ -308,7 +308,10 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         this_thread::sleep_for(chrono::seconds(tx_delay));
     }
 
-    std::this_thread::sleep_for(std::chrono::seconds(60));
+    const char* waitPeriodEnv = getenv("WAIT_PERIOD");
+    int waitPeriod = waitPeriodEnv ? atoi(waitPeriodEnv) : 300;
+
+    std::this_thread::sleep_for(std::chrono::seconds(waitPeriod));
     saveTangleToCSV(tangle.getAllTransactions(), "tangle_state.csv");
 
     // throw std::runtime_error("[SIMULATOR] Tangle state saved to tangle_state.txt. Exiting simulation.");
