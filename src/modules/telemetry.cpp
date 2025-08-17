@@ -307,7 +307,7 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 
 											 Tangle &tangle,
 											 Peers &peers,
-											 std::vector<MetricSample> &metrics)
+											 std::vector<MetricSample> &metrics, int runId)
 {
 
 	auto txs = tangle.getAllTransactions();
@@ -315,7 +315,7 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 
 	Json::Value root(Json::objectValue);
 	root["nodeId"] = nodeId;
-
+	root["runId"] = runId;
 	root["ts_end"] = now_iso8601();
 
 	// tangle array
@@ -419,9 +419,10 @@ bool sendTelemetry(const std::string &endpoint,
 				   const std::string &nodeId,
 				   Tangle &tangle,
 				   Peers &peers,
-				   std::vector<MetricSample> &metrics)
+				   std::vector<MetricSample> &metrics,
+				   int runId)
 {
-	std::string payload = buildTelemetryPayloadJson(nodeId, tangle, peers, metrics);
+	std::string payload = buildTelemetryPayloadJson(nodeId, tangle, peers, metrics, runId);
 
 	HttpResult r = http_post_json(endpoint, payload);
 	if (!r.ok)

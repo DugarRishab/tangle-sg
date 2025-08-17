@@ -33,6 +33,8 @@ bool sendTelemetry(const std::string &endpoint,
 				   const std::string &nodeId,
 				   Tangle &tangle,
 				   Peers &peers,
-				   std::vector<MetricSample> &metrics);
+				   std::vector<MetricSample> &metrics,
+				   int runId = 0);
+				
 
 #endif // TELEMETRY_H

@@ -515,7 +515,13 @@ int main()
 
     const std::string endpoint = "http://172.25.0.10:8000/api/telemetry";
 
-    bool ok = sendTelemetry(endpoint, nodeId, tangle, peers, metrics_snapshot);
+
+    const char *run_env = getenv("RUN_ID") || 0;
+    int runId = run_env ? atoi(run_env) : 0;
+
+    
+
+    bool ok = sendTelemetry(endpoint, nodeId, tangle, peers, metrics_snapshot, runId);
     if (!ok)
     {
         std::cerr << "Telemetry upload failed\n";
