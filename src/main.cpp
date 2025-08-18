@@ -382,7 +382,7 @@ std::string loadOrCreateHMACSecret(const std::string &path)
 }
 
 int main()
-n{
+{
     std::cout.setf(std::ios::unitbuf);
 
     if (sodium_init() < 0)
