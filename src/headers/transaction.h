@@ -30,8 +30,10 @@ struct tx_metadata
 
     int64_t consensusTimestamp; // timestamp when consensus is reached
     int64_t consensusDuration;
+    
     int64_t verificationTimestamp; // timestamp when transaction is verified
     int64_t verificationDuration; // time taken to verify the transaction
+    
     int64_t powDuration; // time taken to perform PoW
     int64_t tsaDuration;
     int64_t completionDuration;

@@ -289,12 +289,14 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         newTx.metadata.completionDuration = elapsed;
         newTx.metadata.powDuration = powEndTime - powStartTime;
 
-        tangle.updateTransaction(newTx); // Update the transaction in the Tangle
+        tangle.updateTransactionMetrics(newTx); // Update the transaction in the Tangle
 
         newTx = tangle.getTransaction(newTx.data.transaction_id);
 
         cout << "[SIMULATOR] Transaction " << newTx.data.transaction_id << " added to Tangle." << endl;
-        cout << "[SIMULATOR] Time elapsed:" << elapsed << " ms" << endl;
+        cout << "[SIMULATOR] TSA Duration: " << newTx.metadata.tsaDuration << " ms" << endl;
+        cout << "[SIMULATOR] PoW Duration: " << newTx.metadata.powDuration << " ms" << endl;
+        cout << "[SIMULATOR] Total Time elapsed:" << elapsed << " ms" << endl;
 
         // auto finalDataSerialized = Tangle::serializeTransaction(newTx);
         // auto finalDataDeSerialized = Tangle::deserializeTransaction(finalDataSerialized);
@@ -380,7 +382,7 @@ std::string loadOrCreateHMACSecret(const std::string &path)
 }
 
 int main()
-{
+n{
     std::cout.setf(std::ios::unitbuf);
 
     if (sodium_init() < 0)

@@ -76,6 +76,7 @@ Transaction Tangle::addNewTransaction(Transaction &tx)
 
     return tx;
 }
+
 int Tangle::addTransaction(Transaction &tx, int update)
 {
     // Lock the mutex to protect shared Tangle access
@@ -463,30 +464,79 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
     auto it = transactions.find(tx.data.transaction_id);
     if (it != transactions.end())
     {
-        if (it->second.metadata.lastUpdated < tx.metadata.lastUpdated)
+        Transaction &existing = it->second;
+
+        auto dataEquals = [](const tx_data &a, const tx_data &b) -> bool
         {
+            if (a.transaction_id != b.transaction_id)
+                return false;
+            if (a.sender != b.sender)
+                return false;
+            if (a.receiver != b.receiver)
+                return false;
+            if (a.amount != b.amount)
+                return false;
+            if (a.unit != b.unit)
+                return false;
+            if (a.price_per_unit != b.price_per_unit)
+                return false;
+            if (a.currency != b.currency)
+                return false;
+            if (a.timestamp != b.timestamp)
+                return false;
+            if (a.timestampInt != b.timestampInt)
+                return false;
+            if (a.parents.size() != b.parents.size())
+                return false;
+            for (size_t i = 0; i < a.parents.size(); ++i)
+                if (a.parents[i] != b.parents[i])
+                    return false;
+            return true;
+        };
 
-            if (it->second.metadata.signature2.empty())
+        if (!dataEquals(existing.data, tx.data))
+        {
+            // Data update not allowed.
+            std::cerr << "[TANGLE][ERROR] Data mismatch for transaction: " << tx.data.transaction_id << std::endl;
+            return 0;
+        }
+
+        bool metadataChanged = false;
+
+        if (existing.metadata.signature2.empty() && !tx.metadata.signature2.empty())
+        {
+            existing.metadata.signature2 = tx.metadata.signature2;
+            // existing.metadata.lastUpdated = tx.metadata.lastUpdated;
+            metadataChanged = true;
+        }
+
+        if (!existing.metadata.signature1.empty() && !existing.metadata.signature2.empty())
+        {
+            int weightIncrement = tx.metadata.cumulative_weight - existing.metadata.cumulative_weight;
+            if (weightIncrement > 0)
             {
-                it->second.metadata.signature2 = tx.metadata.signature2;
-                it->second.metadata.lastUpdated = tx.metadata.lastUpdated;
+                existing.metadata.cumulative_weight += weightIncrement;
+                // existing.metadata.lastUpdated = tx.metadata.lastUpdated;
+                // update parents' cumulative weight
+                updateCumulativeWeightOfParents(existing.data.parents, weightIncrement);
+                metadataChanged = true;
             }
+        }
 
-            if (!it->second.metadata.signature2.empty() && !it->second.metadata.signature1.empty())
-            {
-                // allow weight updates only if both signatures are present
-                int weightIncrement = tx.metadata.cumulative_weight - it->second.metadata.cumulative_weight;
-                if (weightIncrement > 0)
-                {
-                    it->second.metadata.cumulative_weight += weightIncrement;
-                    it->second.metadata.lastUpdated = tx.metadata.lastUpdated;
-                    updateCumulativeWeightOfParents(it->second.data.parents, weightIncrement);
-                }
-            }
+        if (existing.metadata.lastUpdated < tx.metadata.lastUpdated)
+        {
+            existing.metadata.consensusTimestamp = tx.metadata.consensusTimestamp;
+            existing.metadata.consensusDuration = tx.metadata.consensusDuration;
+            existing.metadata.verificationTimestamp = tx.metadata.verificationTimestamp;
+            existing.metadata.verificationDuration = tx.metadata.verificationDuration;
+            existing.metadata.lastUpdated = tx.metadata.lastUpdated;
+            metadataChanged = true;
+        }
 
+        if(metadataChanged){
+            
             std::cout << "[TANGLE] Transaction updated in Tangle: " << tx.data.transaction_id << endl;
-
-            return 1; // Transaction updated
+            return 1; // Transaction metadata updated
         }
         else
         {
@@ -495,6 +545,28 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
 
             return 0;
         }
+    }
+    else
+    {
+        cerr << "[TANGLE][ERROR] Transaction not found in Tangle for update: " << tx.data.transaction_id << endl;
+        return -1;
+    }
+}
+
+int Tangle::updateTransactionMetrics(Transaction &tx){
+
+    std::unique_lock lock(tangleMutex);
+
+    auto it = transactions.find(tx.data.transaction_id);
+    if (it != transactions.end())
+    {
+        Transaction &existing = it->second;
+
+        existing.metadata.powDuration = tx.metadata.powDuration;
+        existing.metadata.tsaDuration = tx.metadata.tsaDuration;
+        existing.metadata.completionDuration = tx.metadata.completionDuration;
+
+        return 1;
     }
     else
     {
