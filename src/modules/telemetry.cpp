@@ -278,7 +278,7 @@ inline HttpResult http_post_json(const std::string &url, const std::string &payl
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)payload.size());
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res.body);
-	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 300L);
 
 	CURLcode rc = curl_easy_perform(curl);
 	if (rc != CURLE_OK)
