@@ -87,6 +87,7 @@ public:
 
 	void enqueueMessage(const std::string &uri, Message &qm);
 	bool drainOutgoingQueue(const std::string &uri, std::deque<Message> &outgoingQueue);
+	bool allQueuesEmpty();
 
 private:
 	// std::vector<Peer> peers_;

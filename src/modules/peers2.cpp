@@ -170,3 +170,14 @@ bool Peers::drainOutgoingQueue(const std::string &uri, std::deque<Message> &outQ
 
 	return true;
 }
+bool Peers::allQueuesEmpty()
+{
+	std::shared_lock lock(peersMutex_);
+
+	for(auto &it : peers_){
+		if(it->second.outgoingQueue.empty())
+			return false;
+	}
+
+	return true;
+}

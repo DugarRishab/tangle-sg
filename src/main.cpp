@@ -312,8 +312,14 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 
     const char* waitPeriodEnv = getenv("WAIT_PERIOD");
     int waitPeriod = waitPeriodEnv ? atoi(waitPeriodEnv) : 300;
-
     std::this_thread::sleep_for(std::chrono::seconds(waitPeriod));
+
+    while(!peers.allQueuesEmpty()){
+        // additional sleep in case the queueis still not empty after wait time.
+        std::cout << "[SIMULATOR] QUEUES are not empty yet! Waiting for 1 more minute." << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(60));
+    }
+
     saveTangleToCSV(tangle.getAllTransactions(), "tangle_state.csv");
 
     // throw std::runtime_error("[SIMULATOR] Tangle state saved to tangle_state.txt. Exiting simulation.");
