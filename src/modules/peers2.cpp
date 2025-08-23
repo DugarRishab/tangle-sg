@@ -175,7 +175,7 @@ bool Peers::allQueuesEmpty()
 	std::shared_lock lock(peersMutex_);
 
 	for(auto &it : peers_){
-		if(it->second.outgoingQueue.empty())
+		if(!it.second.outgoingQueue.empty())
 			return false;
 	}
 
