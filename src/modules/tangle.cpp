@@ -469,28 +469,63 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
         auto dataEquals = [](const tx_data &a, const tx_data &b) -> bool
         {
             if (a.transaction_id != b.transaction_id)
+            {
+                std::cerr << "[MISMATCH] transaction_id: " << a.transaction_id << " vs " << b.transaction_id << std::endl;
                 return false;
+            }
             if (a.sender != b.sender)
+            {
+                std::cerr << "[MISMATCH] sender: " << a.sender << " vs " << b.sender << std::endl;
                 return false;
+            }
             if (a.receiver != b.receiver)
+            {
+                std::cerr << "[MISMATCH] receiver: " << a.receiver << " vs " << b.receiver << std::endl;
                 return false;
+            }
             if (a.amount != b.amount)
+            {
+                std::cerr << "[MISMATCH] amount: " << a.amount << " vs " << b.amount << std::endl;
                 return false;
+            }
             if (a.unit != b.unit)
+            {
+                std::cerr << "[MISMATCH] unit: " << a.unit << " vs " << b.unit << std::endl;
                 return false;
+            }
             if (a.price_per_unit != b.price_per_unit)
+            {
+                std::cerr << "[MISMATCH] price_per_unit: " << a.price_per_unit << " vs " << b.price_per_unit << std::endl;
                 return false;
+            }
             if (a.currency != b.currency)
+            {
+                std::cerr << "[MISMATCH] currency: " << a.currency << " vs " << b.currency << std::endl;
                 return false;
+            }
             if (a.timestamp != b.timestamp)
+            {
+                std::cerr << "[MISMATCH] timestamp: " << a.timestamp << " vs " << b.timestamp << std::endl;
                 return false;
+            }
             if (a.timestampInt != b.timestampInt)
+            {
+                std::cerr << "[MISMATCH] timestampInt: " << a.timestampInt << " vs " << b.timestampInt << std::endl;
                 return false;
+            }
             if (a.parents.size() != b.parents.size())
+            {
+                std::cerr << "[MISMATCH] parents.size(): " << a.parents.size() << " vs " << b.parents.size() << std::endl;
                 return false;
+            }
             for (size_t i = 0; i < a.parents.size(); ++i)
+            {
                 if (a.parents[i] != b.parents[i])
+                {
+                    std::cerr << "[MISMATCH] parents[" << i << "]: " << a.parents[i] << " vs " << b.parents[i] << std::endl;
                     return false;
+                }
+            }
             return true;
         };
 
