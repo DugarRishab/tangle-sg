@@ -314,7 +314,15 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 	auto peersList = peers.getPeerList();
 
 	Json::Value root(Json::objectValue);
+
+	const char *ip_str = std::getenv(MY_IP);
+	if(!ip_str){
+		std::cerr << "[ERROR]: MY_IP environment variable not set\n";
+	}
+	string my_ip = ip_str;
+
 	root["nodeId"] = nodeId;
+	root["nodeIP"] = my_ip;
 	root["runId"] = runId;
 	root["ts_end"] = now_iso8601();
 
