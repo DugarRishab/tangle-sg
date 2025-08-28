@@ -315,7 +315,7 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 
 	Json::Value root(Json::objectValue);
 
-	const char *ip_str = std::getenv(MY_IP);
+	const char *ip_str = std::getenv("MY_IP");
 	if(!ip_str){
 		std::cerr << "[ERROR]: MY_IP environment variable not set\n";
 	}
