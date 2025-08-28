@@ -255,7 +255,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         //           << std::flush;
 
         newTx.data.timestamp = timeNow(); // Use current time in seconds
-        newTx.data.timestampInt = static_cast<int>(time(nullptr));
+        
         newTx.data.sender = getenv("UID"); // Use UID from environment variable
         newTx.data.receiver = receiver;
         newTx.data.amount = energyDist(gen);
@@ -474,7 +474,7 @@ int main()
         0,                               // price_per_unit
         "INR",                           // currency
         time(nullptr),                   // timestamp
-        static_cast<int>(time(nullptr)), // timestampInt
+        
         {}                               // parents (empty for genesis)
     };
     tx_metadata genesisMetadata = {

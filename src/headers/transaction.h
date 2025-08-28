@@ -15,7 +15,7 @@ struct tx_data
     double price_per_unit;
     std::string currency;
     int64_t timestamp;
-    int timestampInt;
+    
     std::vector<std::string> parents;
 };
 

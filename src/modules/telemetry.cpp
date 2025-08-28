@@ -319,53 +319,70 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 	root["ts_end"] = now_iso8601();
 
 	// tangle array
+	
 	Json::Value tangle_arr(Json::arrayValue);
 	for (auto &[tx_id, tx] : txs)
 	{
 		Json::Value jtx(Json::objectValue);
 
-		jtx["tx_id"] = tx.data.transaction_id;
+		// ------------------------
+		// tx_data -> "data"
+		// ------------------------
+		Json::Value jdata(Json::objectValue);
+
+		jdata["transaction_id"] = tx.data.transaction_id;
+
 		// parents array
 		Json::Value pars(Json::arrayValue);
 		for (const auto &p : tx.data.parents)
 			pars.append(p);
-		jtx["parents"] = pars;
+		jdata["parents"] = pars;
 
-		// add other fields (best-effort)
-		jtx["timestamp"] = std::to_string(tx.data.timestamp); // if timestamp is time_t
-		jtx["sender"] = tx.data.sender;
-		jtx["receiver"] = tx.data.receiver;
-		jtx["amount"] = tx.data.amount;
-		jtx["unit"] = tx.data.unit;
-		jtx["price_per_unit"] = tx.data.price_per_unit;
-		jtx["currency"] = tx.data.currency;
+		jdata["timestamp"] = Json::Value((Json::Int64)tx.data.timestamp);
+		jdata["sender"] = tx.data.sender;
+		jdata["receiver"] = tx.data.receiver;
+		jdata["amount"] = tx.data.amount;
+		jdata["unit"] = tx.data.unit;
+		jdata["price_per_unit"] = tx.data.price_per_unit;
+		jdata["currency"] = tx.data.currency;
 
-		// metadata
-		jtx["cumulative_weight"] = Json::Value((Json::UInt64)tx.metadata.cumulative_weight);
-		jtx["lastUpdated"] = Json::Value((Json::UInt64)tx.metadata.lastUpdated);
-		jtx["signature1"] = tx.metadata.signature1;
-		jtx["signature2"] = tx.metadata.signature2;
-		jtx["checksum"] = tx.metadata.checksum;
+		jtx["data"] = jdata;
 
-		jtx["consensusTimestamp"] = Json::Value((Json::UInt64)tx.metadata.consensusTimestamp);
-		jtx["consensusDuration"] = Json::Value((Json::UInt64)tx.metadata.consensusDuration);
-		jtx["verificationTimestamp"] = Json::Value((Json::UInt64)tx.metadata.verificationTimestamp);
-		jtx["verificationDuration"] = Json::Value((Json::UInt64)tx.metadata.verificationDuration);
-		jtx["powDuration"] = Json::Value((Json::UInt64)tx.metadata.powDuration);
-		jtx["tsaDuration"] = Json::Value((Json::UInt64)tx.metadata.tsaDuration);
-		jtx["completionDuration"] = Json::Value((Json::UInt64)tx.metadata.completionDuration);
+		// ------------------------
+		// tx_metadata -> "metadata"
+		// ------------------------
+		Json::Value jmeta(Json::objectValue);
 
-		// hops: assuming tx.metadata.hops is a vector of pairs (timestamp, uid)
+		jmeta["lastUpdated"] = Json::Value((Json::Int64)tx.metadata.lastUpdated);
+		jmeta["cumulative_weight"] = Json::Value((Json::UInt64)tx.metadata.cumulative_weight);
+		jmeta["signature1"] = tx.metadata.signature1;
+		jmeta["signature2"] = tx.metadata.signature2;
+		jmeta["checksum"] = tx.metadata.checksum;
+
+		jmeta["consensusTimestamp"] = Json::Value((Json::Int64)tx.metadata.consensusTimestamp);
+		jmeta["consensusDuration"] = Json::Value((Json::Int64)tx.metadata.consensusDuration);
+
+		jmeta["verificationTimestamp"] = Json::Value((Json::Int64)tx.metadata.verificationTimestamp);
+		jmeta["verificationDuration"] = Json::Value((Json::Int64)tx.metadata.verificationDuration);
+
+		jmeta["powDuration"] = Json::Value((Json::Int64)tx.metadata.powDuration);
+		jmeta["tsaDuration"] = Json::Value((Json::Int64)tx.metadata.tsaDuration);
+		jmeta["completionDuration"] = Json::Value((Json::Int64)tx.metadata.completionDuration);
+
+		// hops array
 		Json::Value hops_arr(Json::arrayValue);
 		for (const auto &hop : tx.metadata.hops)
 		{
 			Json::Value hop_obj(Json::objectValue);
-			hop_obj["timestamp"] = Json::Value((Json::UInt64)hop.first);
+			hop_obj["timestamp"] = Json::Value((Json::Int64)hop.first);
 			hop_obj["uid"] = hop.second;
 			hops_arr.append(hop_obj);
 		}
-		jtx["hops"] = hops_arr;
+		jmeta["hops"] = hops_arr;
 
+		jtx["metadata"] = jmeta;
+
+		// push transaction into array
 		tangle_arr.append(jtx);
 	}
 	root["tangle"] = tangle_arr;

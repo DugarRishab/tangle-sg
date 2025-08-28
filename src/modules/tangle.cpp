@@ -508,11 +508,7 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
                 std::cerr << "[MISMATCH] timestamp: " << a.timestamp << " vs " << b.timestamp << std::endl;
                 return false;
             }
-            if (a.timestampInt != b.timestampInt)
-            {
-                std::cerr << "[MISMATCH] timestampInt: " << a.timestampInt << " vs " << b.timestampInt << std::endl;
-                return false;
-            }
+            
             if (a.parents.size() != b.parents.size())
             {
                 std::cerr << "[MISMATCH] parents.size(): " << a.parents.size() << " vs " << b.parents.size() << std::endl;
