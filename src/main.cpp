@@ -19,6 +19,7 @@
 #include <ctime>   // time_t, time()
 #include <iomanip> // for std::quoted
 #include <curl/curl.h>
+#include "headers/TeeBuf.h"
 
 #include "headers/telemetry.h"
 
@@ -397,6 +398,19 @@ int main()
         return 1;
     }
 
+    // Open log file (append or truncate as you wish)
+    std::ofstream logfile("program_log.txt", std::ios::out | std::ios::trunc);
+    if (!logfile.is_open())
+    {
+        std::cerr << "Failed to open log file\n";
+        return 1;
+    }
+
+    // Save the current cout buffer and set our tee buffer
+    std::streambuf *oldCoutBuf = std::cout.rdbuf();
+    TeeTimestampBuf tb(oldCoutBuf, logfile.rdbuf());
+    std::cout.rdbuf(&tb);
+
     // install signal handlers early to handle graceful shutdown
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
@@ -565,6 +579,11 @@ int main()
     curl_global_cleanup();
 
     serverThread.join();
+
+    // flush and restore
+    std::cout.flush();
+    std::cout.rdbuf(oldCoutBuf);
+    logfile.close();
 
     return 0;
 }
