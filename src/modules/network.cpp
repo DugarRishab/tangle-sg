@@ -36,7 +36,9 @@ Network::Network(uint16_t ws_port, Tangle &tangle, Peers &peers) : ws_port(ws_po
 {
     initServer();
     initClient();
-    startPeerMonitor(std::chrono::seconds(30));
+    const char *monitorDelayEnv = getenv("MONITOR_PERIOD");
+    int monitorDelay = monitorDelayEnv ? atoi(monitorDelayEnv) : 5;
+    startPeerMonitor(std::chrono::seconds(monitorDelay));
 }
 
 Network::~Network()
@@ -85,14 +87,23 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
                         {
                             for (auto &qm : outgoingQueue)
                             {
-                                client->send(peer.client_hdl, qm.payload, qm.opcode);
-                                std::cout << "[MONITOR] Sent queued message to peer " << peer.id << ": " << qm.payload << "\n";
-                                outgoingQueue.pop_front();
+                                try
+                                {
+                                    client->send(peer.client_hdl, qm.payload, qm.opcode);
+                                    std::cout << "[MONITOR] Sent queued message to peer " << peer.id << ": " << qm.payload << "\n";
+                                    outgoingQueue.pop_front();
+                                }
+                                catch (const websocketpp::exception &e)
+                                {
+                                    std::cerr << "[MONITOR][ERROR] Failed to send queued message to peer " << peer.id << ": " << e.what() << "\n";
+                                    // Re-enqueue the message for future attempts
+                                    peers.enqueueMessage(peer.uri, qm);
+                                    // break; // exit the loop on failure
+                                }
                             }
                         }
 
                         continue;
-
                     }
 
                     // If retryCount reached limit, skip
@@ -187,7 +198,6 @@ void Network::initClient()
                     std::cout << "[CLIENT] Sent queued message to peer " << p.id << ": " << qm.payload << "\n";
                     outgoingQueue.pop_front();
                 }
-                
             }
         });
 
@@ -492,7 +502,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                         tx.metadata.lastUpdated = timeNow();
                         tx.metadata.verificationTimestamp = timeNow();
                         tx.metadata.verificationDuration = timeNow() - tx.data.timestamp;
-                        
+
                         tangle.updateTransaction(tx);
                         tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
                                                                                // Update the transaction in Tangle
@@ -682,7 +692,7 @@ void Network::sendMessage(const string &message, const string &messageType, Peer
         // }
         Message msg = {fullMessage, websocketpp::frame::opcode::text};
         peers.enqueueMessage(peer.uri, msg);
-        
+
         // connectWebSocket(peer);
 
         std::cout << "[SEND] Message queued for peer: " << peer.id << " at " << peer.address << ":" << peer.port << endl;
