@@ -493,6 +493,7 @@ int main()
     };
     tx_metadata genesisMetadata = {
         time(nullptr),   // lastUpdated
+        {},              // weightMap   
         0,               // cumulative_weight
         "genesis_sign1", // signature1
         "genesis_sign2", // signature2
