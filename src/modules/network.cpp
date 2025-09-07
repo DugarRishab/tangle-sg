@@ -667,7 +667,33 @@ bool Network::connectWebSocket(Peer &peer)
 // General function to send a message to all active peers. Input - Message and Message Type
 void Network::broadcastMessage(const string &message, const string &messageType)
 {
-    for (auto &item : peers.getPeerList())
+    // load maxPeers from environment variable
+	const char *maxPeersEnv = std::getenv("MAX_PEERS");
+    int maxPeers = 5; // default value
+	if (maxPeersEnv)
+	{
+		try
+		{
+			maxPeers = std::stoi(maxPeersEnv);
+			if (maxPeers <= 0)
+			{
+				std::cerr << "[ERROR]: MAX_PEERS must be a positive integer\n";
+				throw std::runtime_error("Invalid MAX_PEERS value");
+			}
+			std::cout << "[INFO] Max peers set to: " << maxPeers << "\n";
+		}
+		catch (const std::exception &e)
+		{
+			std::cerr << "[ERROR]: Invalid MAX_PEERS value: " << e.what() << "\n";
+			throw;
+		}
+	}
+	else
+	{
+		std::cout << "[INFO] MAX_PEERS not set, using default value of 5\n";
+	}
+
+    for (auto &item : peers.getRandomPeerSubset(maxPeers))
     {
         // Construct the message with type prefix
         string fullMessage = messageType + "::TYPE::" + message;

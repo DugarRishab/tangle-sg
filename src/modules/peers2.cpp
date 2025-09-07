@@ -135,6 +135,36 @@ std::unordered_map<std::string, Peer> Peers::getPeerList()
 	return peers_;
 }
 
+std::unordered_map<std::string, Peer> Peers::getRandomPeerSubset(int count)
+{
+	std::shared_lock lock(peersMutex_);
+
+	if (peers_.empty() || count <= 0)
+	{
+		return {};
+	}
+
+	std::unordered_map<std::string, Peer> subset;
+	std::vector<std::string> keys;
+	for (const auto &pair : peers_)
+	{
+		keys.push_back(pair.first);
+	}
+
+	// Shuffle the keys to get random selection
+	static thread_local std::mt19937 gen{std::random_device{}()};
+	std::shuffle(keys.begin(), keys.end(), gen);
+
+	// Select up to 'count' random peers
+	for (int i = 0; i < std::min(count, static_cast<int>(keys.size())); ++i)
+	{
+		const std::string &key = keys[i];
+		subset.emplace(key, peers_.at(key));
+	}
+
+	return subset;
+}
+
 Peer Peers::getRandomPeer()
 {
 	std::shared_lock lock(peersMutex_);

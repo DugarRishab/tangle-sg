@@ -84,7 +84,7 @@ public:
 	int updatePeerState(const std::string &uri, ConnectionState newState);
 	std::unordered_map<std::string, Peer> getPeerList();
 	Peer getRandomPeer();
-
+	std::unordered_map<std::string, Peer> getRandomPeerSubset(int count);
 	void enqueueMessage(const std::string &uri, Message &qm);
 	bool drainOutgoingQueue(const std::string &uri, std::deque<Message> &outgoingQueue);
 	bool allQueuesEmpty();
