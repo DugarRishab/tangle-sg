@@ -2,6 +2,7 @@
 #define TRANSACTION_H
 #include <string>
 #include <vector>
+#include <unordered_set>
 
 using namespace std;
 
@@ -23,7 +24,10 @@ struct tx_data
 struct tx_metadata
 {
     int64_t lastUpdated;
-    int cumulative_weight;
+
+    std::unordered_set<std::string> weightMap; // array of all nodes that have added weight directly to this tx
+
+    int cumulative_weight; // length of weightMap + weight increment from children
     std::string signature1; // sender’s sig
     std::string signature2; // receiver’s sig
     std::string checksum; // hash of Tx->ata for integrity

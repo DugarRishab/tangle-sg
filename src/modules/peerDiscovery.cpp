@@ -281,11 +281,11 @@ void PeerDiscovery::responderLoop()
 
 				if (type == "PEER_REQUEST")
 				{
-					if (peers.countPeers() >= maxPeers_)
-					{
-						std::cout << "[PD][WARN] Max peers reached, ignoring PEER_REQUEST.\n";
-						continue; // Ignore if max peers reached
-					}
+					// if (peers.countPeers() >= maxPeers_)
+					// {
+					// 	std::cout << "[PD][WARN] Max peers reached, ignoring PEER_REQUEST.\n";
+					// 	continue; // Ignore if max peers reached
+					// }
 					// generate N2 and HMAC
 					uint64_t N1 = msg["nonce_A"].asUInt64();
 					uint64_t N2 = NONCE_A;
@@ -309,11 +309,11 @@ void PeerDiscovery::responderLoop()
 				}
 				else if (type == "HS_ACK")
 				{
-					if(peers.countPeers() >= maxPeers_)
-					{
-						std::cout << "[PD][WARN] Max peers reached, ignoring HS_ACK.\n";
-						continue; // Ignore if max peers reached
-					}
+					// if(peers.countPeers() >= maxPeers_)
+					// {
+					// 	std::cout << "[PD][WARN] Max peers reached, ignoring HS_ACK.\n";
+					// 	continue; // Ignore if max peers reached
+					// }
 					// Phase 3
 					uint64_t N2 = msg["nonce_B"].asUInt64();
 					std::string A_UID = msg["from"].asString();
@@ -343,11 +343,11 @@ void PeerDiscovery::responderLoop()
 				{
 					std::cout << "[PD] HS_RESPONSE from " << msg["from"].asString() << "\n";
 
-					if (peers.countPeers() >= maxPeers_)
-					{
-						std::cout << "[PD][WARN] Max peers reached, ignoring HS_RESPONSE.\n";
-						continue; // Ignore if max peers reached
-					}
+					// if (peers.countPeers() >= maxPeers_)
+					// {
+					// 	std::cout << "[PD][WARN] Max peers reached, ignoring HS_RESPONSE.\n";
+					// 	continue; // Ignore if max peers reached
+					// }
 
 					if (!verifyHMAC(msg))
 					{

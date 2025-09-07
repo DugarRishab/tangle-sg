@@ -133,23 +133,36 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weigh
 
     // lock_guard<mutex> lock(tangleMutex);
     // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
+    
     std::unique_lock lock(tangleMutex);
-
-    // std::cout << "[LOG][WEIGHT] current cumulative weight for transaction: "
-    //   << transaction_id << " is " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
-    transactions[transaction_id].metadata.cumulative_weight += weightIncrement;
-    std::cout << "[TANGLE] Cumulative weight updated for transaction: "
-              << ". New cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
 
     if (transactions.find(transaction_id) == transactions.end())
     {
         std::cerr << "[ERROR] Transaction " << transaction_id << " not found in Tangle." << std::endl;
         return;
     }
-    transactions[transaction_id].metadata.lastUpdated = timeNow();
-    // Update cumulative weight for all parents
 
-    updateCumulativeWeightOfParents(transactions[transaction_id].data.parents, weightIncrement);
+    const char* uidEnv = std::getenv("UID");
+    std::string uid = uidEnv ? uidEnv : "";
+
+    // Add the node to the weightMap if not already present
+    if (transactions[transaction_id].metadata.weightMap.find(uid) == transactions[transaction_id].metadata.weightMap.end()) {
+        transactions[transaction_id].metadata.weightMap.insert(uid);
+        transactions[transaction_id].metadata.cumulative_weight++;
+        transactions[transaction_id].metadata.lastUpdated = timeNow();
+
+        std::cout << "[TANGLE] Cumulative weight updated for transaction: "
+                  << ". New cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
+
+        // Update cumulative weight for all parents
+
+        updateCumulativeWeightOfParents(transactions[transaction_id].data.parents, weightIncrement);
+    }
+    else{
+        std::cout << "[TANGLE] Node " << uid << " has already added weight to transaction " << transaction_id << ". No update performed." << std::endl;
+    }
+
+    
 }
 
 string Tangle::serializeTransactionData(const Transaction &tx)
@@ -543,10 +556,19 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
 
         if (!existing.metadata.signature1.empty() && !existing.metadata.signature2.empty())
         {
-            int weightIncrement = tx.metadata.cumulative_weight - existing.metadata.cumulative_weight;
+            int weightIncrement = 0;
+            for (const auto& nodeId : tx.metadata.weightMap) {
+                if (existing.metadata.weightMap.find(nodeId) == existing.metadata.weightMap.end()) {
+                    existing.metadata.weightMap.insert(nodeId);
+                    existing.metadata.cumulative_weight++;
+                    weightIncrement++;
+                }
+            }
+
+            
             if (weightIncrement > 0)
             {
-                existing.metadata.cumulative_weight += weightIncrement;
+                
                 // existing.metadata.lastUpdated = tx.metadata.lastUpdated;
                 // update parents' cumulative weight
                 updateCumulativeWeightOfParents(existing.data.parents, weightIncrement);
