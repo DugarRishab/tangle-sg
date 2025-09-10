@@ -133,7 +133,7 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weigh
 
     // lock_guard<mutex> lock(tangleMutex);
     // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
-    
+
     std::unique_lock lock(tangleMutex);
 
     if (transactions.find(transaction_id) == transactions.end())
@@ -142,11 +142,12 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weigh
         return;
     }
 
-    const char* uidEnv = std::getenv("UID");
+    const char *uidEnv = std::getenv("UID");
     std::string uid = uidEnv ? uidEnv : "";
 
     // Add the node to the weightMap if not already present
-    if (transactions[transaction_id].metadata.weightMap.find(uid) == transactions[transaction_id].metadata.weightMap.end()) {
+    if (transactions[transaction_id].metadata.weightMap.find(uid) == transactions[transaction_id].metadata.weightMap.end())
+    {
         transactions[transaction_id].metadata.weightMap.insert(uid);
         transactions[transaction_id].metadata.cumulative_weight++;
         transactions[transaction_id].metadata.lastUpdated = timeNow();
@@ -158,11 +159,10 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weigh
 
         updateCumulativeWeightOfParents(transactions[transaction_id].data.parents, weightIncrement);
     }
-    else{
+    else
+    {
         std::cout << "[TANGLE] Node " << uid << " has already added weight to transaction " << transaction_id << ". No update performed." << std::endl;
     }
-
-    
 }
 
 string Tangle::serializeTransactionData(const Transaction &tx)
@@ -230,6 +230,16 @@ string Tangle::serializeTransaction(const Transaction &tx)
        << tx.metadata.tsaDuration << ","
        << tx.metadata.completionDuration;
 
+    // serialize weightMap
+    ss << ",[";
+    for (size_t i = 0; i < tx.metadata.weightMap.size(); i++)
+    {
+        ss << tx.metadata.weightMap[i];
+        if (i < tx.metadata.weightMap.size() - 1)
+            ss << ",";
+    }
+    ss << "]";
+
     // Serialize parents
     ss << ",[";
     for (size_t i = 0; i < tx.data.parents.size(); i++)
@@ -271,6 +281,29 @@ std::unordered_map<std::string, Transaction> Tangle::deserialize(const string &d
     }
 
     return transactions;
+}
+
+static inline void trim_inplace(std::string &s)
+{
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch)
+                                    { return !std::isspace(ch); }));
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch)
+                         { return !std::isspace(ch); })
+                .base(),
+            s.end());
+}
+
+std::string extract_between_brackets(std::stringstream &ss)
+{
+    std::string chunk;
+    if (!std::getline(ss, chunk, ']'))
+        return ""; // nothing or malformed
+    auto pos = chunk.find('[');
+    if (pos == std::string::npos)
+        return ""; // no '[' found
+    std::string inner = chunk.substr(pos + 1);
+    trim_inplace(inner);
+    return inner; // could be empty -> means []
 }
 
 Transaction Tangle::deserializeTransaction(const string &data)
@@ -323,32 +356,36 @@ Transaction Tangle::deserializeTransaction(const string &data)
     getline(ss, line, ',');
     tx.metadata.completionDuration = std::stoll(line);
 
-    // --- Deserialize parents ---
-    std::string parentsStr;
-    getline(ss, parentsStr, ']'); // read until the closing bracket
-    if (!parentsStr.empty())
-        parentsStr = parentsStr.substr(1); // skip "["
-
-    std::stringstream parentsStream(parentsStr);
-    std::string parent;
-
-    while (getline(parentsStream, parent, ','))
+    // --- Deserialize weightMap ---
+    std::string weightInner = extract_between_brackets(ss);
+    std::stringstream wss(weightInner);
+    std::string nodeId;
+    while (std::getline(wss, nodeId, ','))
     {
+        trim_inplace(nodeId);
+        if (!nodeId.empty())
+            tx.metadata.weightMap.insert(nodeId);
+    }
+
+    // --- Deserialize parents ---
+    std::string parentsInner = extract_between_brackets(ss);
+    std::stringstream pss(parentsInner);
+    std::string parent;
+    while (std::getline(pss, parent, ','))
+    {
+        trim_inplace(parent);
         if (!parent.empty())
             tx.data.parents.push_back(parent);
     }
 
     // --- Deserialize hops ---
-    std::string hopsStr;
-    getline(ss, hopsStr, ']'); // read until closing bracket of hops
-    if (!hopsStr.empty())
-        hopsStr = hopsStr.substr(2); // skip ",["
-
-    std::stringstream hopsStream(hopsStr);
+    std::string hopsInner = extract_between_brackets(ss);
+    std::stringstream hopsStream(hopsInner);
     std::string hop;
 
     while (getline(hopsStream, hop, ','))
     {
+        trim_inplace(hop);
         if (hop.size() >= 3 && hop.front() == '(' && hop.back() == ')')
         {
             hop = hop.substr(1, hop.size() - 2); // strip ( )
@@ -521,7 +558,7 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
                 std::cerr << "[MISMATCH] timestamp: " << a.timestamp << " vs " << b.timestamp << std::endl;
                 return false;
             }
-            
+
             if (a.parents.size() != b.parents.size())
             {
                 std::cerr << "[MISMATCH] parents.size(): " << a.parents.size() << " vs " << b.parents.size() << std::endl;
@@ -557,18 +594,19 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
         if (!existing.metadata.signature1.empty() && !existing.metadata.signature2.empty())
         {
             int weightIncrement = 0;
-            for (const auto& nodeId : tx.metadata.weightMap) {
-                if (existing.metadata.weightMap.find(nodeId) == existing.metadata.weightMap.end()) {
+            for (const auto &nodeId : tx.metadata.weightMap)
+            {
+                if (existing.metadata.weightMap.find(nodeId) == existing.metadata.weightMap.end())
+                {
                     existing.metadata.weightMap.insert(nodeId);
                     existing.metadata.cumulative_weight++;
                     weightIncrement++;
                 }
             }
 
-            
             if (weightIncrement > 0)
             {
-                
+
                 // existing.metadata.lastUpdated = tx.metadata.lastUpdated;
                 // update parents' cumulative weight
                 updateCumulativeWeightOfParents(existing.data.parents, weightIncrement);
@@ -586,8 +624,9 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
             metadataChanged = true;
         }
 
-        if(metadataChanged){
-            
+        if (metadataChanged)
+        {
+
             std::cout << "[TANGLE] Transaction updated in Tangle: " << tx.data.transaction_id << endl;
             return 1; // Transaction metadata updated
         }
@@ -606,7 +645,8 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
     }
 }
 
-int Tangle::updateTransactionMetrics(Transaction &tx){
+int Tangle::updateTransactionMetrics(Transaction &tx)
+{
 
     std::unique_lock lock(tangleMutex);
 
