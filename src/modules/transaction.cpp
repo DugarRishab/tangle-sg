@@ -5,6 +5,12 @@
 #include <vector>
 #include <stdexcept>
 #include <cstdlib>
+#include <json/json.h> // jsoncpp
+#include <string>
+#include <unordered_set>
+#include <cstdint>
+#include <sstream>
+#include <memory>
 
 using namespace std;
 
