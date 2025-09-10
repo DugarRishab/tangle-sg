@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <shared_mutex>
 #include <openssl/sha.h>
+#include <algorithm>
+#include <cctype>
 #include <iomanip>
 #include "../headers/debug_lock.h"
 using namespace std;
