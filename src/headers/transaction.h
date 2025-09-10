@@ -55,5 +55,8 @@ struct Transaction
 
 std::string signTransaction(const std::string &msg);
 bool verifyTransaction(const std::string &msg, const std::string &sig_b64, const std::string &uid);
+std::string serializeTransaction(const Transaction &tx, bool pretty=false);
+Transaction deserializeTransaction(const std::string &jsonStr);
+std::string serializeTransactionData(const Transaction &tx);
 
 #endif

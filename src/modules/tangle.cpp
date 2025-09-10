@@ -167,31 +167,6 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weigh
     }
 }
 
-string Tangle::serializeTransactionData(const Transaction &tx)
-{
-
-    stringstream ss;
-    ss << tx.data.transaction_id << ","
-       << tx.data.timestamp << ","
-       << tx.data.sender << ","
-       << tx.data.receiver << ","
-       << fixed << setprecision(17) << tx.data.amount << ","
-       << tx.data.unit << ","
-       << fixed << setprecision(17) << tx.data.price_per_unit << ","
-       << tx.data.currency;
-
-    // Serialize previous transactions
-    ss << ",[";
-    for (size_t i = 0; i < tx.data.parents.size(); i++)
-    {
-        ss << tx.data.parents[i];
-        if (i < tx.data.parents.size() - 1)
-            ss << ",";
-    }
-    ss << "]";
-
-    return ss.str();
-}
 
 // Serializes the Tangle's transactions into a string format
 // each part is separated by a comma
@@ -207,63 +182,6 @@ string Tangle::serialize()
     return ss.str();
 }
 
-string Tangle::serializeTransaction(const Transaction &tx)
-{
-
-    stringstream ss;
-    ss << tx.data.transaction_id << ","
-       << tx.data.timestamp << ","
-       << tx.data.sender << ","
-       << tx.data.receiver << ","
-       << fixed << setprecision(17) << tx.data.amount << ","
-       << tx.data.unit << ","
-       << fixed << setprecision(17) << tx.data.price_per_unit << ","
-       << tx.data.currency << ","
-       << tx.metadata.cumulative_weight << ","
-       << tx.metadata.lastUpdated << ","
-       << tx.metadata.signature1 << ","
-       << tx.metadata.signature2 << ","
-       << tx.metadata.checksum << ","
-       << tx.metadata.consensusTimestamp << ","
-       << tx.metadata.consensusDuration << ","
-       << tx.metadata.verificationTimestamp << ","
-       << tx.metadata.verificationDuration << ","
-       << tx.metadata.powDuration << ","
-       << tx.metadata.tsaDuration << ","
-       << tx.metadata.completionDuration;
-
-    // serialize weightMap
-    ss << ",[";
-    for (size_t i = 0; i < tx.metadata.weightMap.size(); i++)
-    {
-        ss << tx.metadata.weightMap[i];
-        if (i < tx.metadata.weightMap.size() - 1)
-            ss << ",";
-    }
-    ss << "]";
-
-    // Serialize parents
-    ss << ",[";
-    for (size_t i = 0; i < tx.data.parents.size(); i++)
-    {
-        ss << tx.data.parents[i];
-        if (i < tx.data.parents.size() - 1)
-            ss << ",";
-    }
-    ss << "]";
-
-    // serialize hops
-    ss << ",[";
-    for (size_t i = 0; i < tx.metadata.hops.size(); i++)
-    {
-        ss << "(" << tx.metadata.hops[i].first << ":" << tx.metadata.hops[i].second << ")";
-        if (i < tx.metadata.hops.size() - 1)
-            ss << ",";
-    }
-    ss << "]";
-
-    return ss.str();
-}
 
 // Returns the Tangle's transactions in a deserialized format
 std::unordered_map<std::string, Transaction> Tangle::deserialize(const string &data)
@@ -306,101 +224,6 @@ std::string extract_between_brackets(std::stringstream &ss)
     std::string inner = chunk.substr(pos + 1);
     trim_inplace(inner);
     return inner; // could be empty -> means []
-}
-
-Transaction Tangle::deserializeTransaction(const string &data)
-{
-    Transaction tx;
-    stringstream ss(data);
-    string line;
-
-    getline(ss, tx.data.transaction_id, ',');
-    getline(ss, line, ',');
-    tx.data.timestamp = std::stoll(line);
-    getline(ss, tx.data.sender, ',');
-    getline(ss, tx.data.receiver, ',');
-    getline(ss, line, ',');
-    tx.data.amount = std::stod(line);
-    getline(ss, tx.data.unit, ',');
-    getline(ss, line, ',');
-    tx.data.price_per_unit = std::stod(line);
-    getline(ss, tx.data.currency, ',');
-
-    getline(ss, line, ',');
-    tx.metadata.cumulative_weight = std::stoi(line);
-
-    getline(ss, line, ',');
-    tx.metadata.lastUpdated = std::stoll(line);
-
-    getline(ss, tx.metadata.signature1, ',');
-    getline(ss, tx.metadata.signature2, ',');
-
-    getline(ss, tx.metadata.checksum, ',');
-
-    getline(ss, line, ',');
-    tx.metadata.consensusTimestamp = std::stoll(line);
-
-    getline(ss, line, ',');
-    tx.metadata.consensusDuration = std::stoll(line);
-
-    getline(ss, line, ',');
-    tx.metadata.verificationTimestamp = std::stoll(line);
-
-    getline(ss, line, ',');
-    tx.metadata.verificationDuration = std::stoll(line);
-
-    getline(ss, line, ',');
-    tx.metadata.powDuration = std::stoll(line);
-
-    getline(ss, line, ',');
-    tx.metadata.tsaDuration = std::stoll(line);
-
-    getline(ss, line, ',');
-    tx.metadata.completionDuration = std::stoll(line);
-
-    // --- Deserialize weightMap ---
-    std::string weightInner = extract_between_brackets(ss);
-    std::stringstream wss(weightInner);
-    std::string nodeId;
-    while (std::getline(wss, nodeId, ','))
-    {
-        trim_inplace(nodeId);
-        if (!nodeId.empty())
-            tx.metadata.weightMap.insert(nodeId);
-    }
-
-    // --- Deserialize parents ---
-    std::string parentsInner = extract_between_brackets(ss);
-    std::stringstream pss(parentsInner);
-    std::string parent;
-    while (std::getline(pss, parent, ','))
-    {
-        trim_inplace(parent);
-        if (!parent.empty())
-            tx.data.parents.push_back(parent);
-    }
-
-    // --- Deserialize hops ---
-    std::string hopsInner = extract_between_brackets(ss);
-    std::stringstream hopsStream(hopsInner);
-    std::string hop;
-
-    while (getline(hopsStream, hop, ','))
-    {
-        trim_inplace(hop);
-        if (hop.size() >= 3 && hop.front() == '(' && hop.back() == ')')
-        {
-            hop = hop.substr(1, hop.size() - 2); // strip ( )
-            size_t colonPos = hop.find(':');
-            if (colonPos != std::string::npos)
-            {
-                int64_t timestamp = std::stoll(hop.substr(0, colonPos));
-                std::string uid = hop.substr(colonPos + 1);
-                tx.metadata.hops.emplace_back(timestamp, uid);
-            }
-        }
-    }
-    return tx;
 }
 
 // Updates the Tangle from a serialized string

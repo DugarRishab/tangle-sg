@@ -76,4 +76,198 @@ bool verifyTransaction(const std::string &msg, const std::string &sig_b64, const
 			   pk.data()) == 0;
 };
 
+string serializeTransaction(const Transaction &tx, bool pretty){
+	Json::Value root;
+	Json::Value jdata;
 
+	jdata["transaction_id"] = tx.data.transaction_id;
+	jdata["sender"] = tx.data.sender;
+	jdata["receiver"] = tx.data.receiver;
+	jdata["amount"] = tx.data.amount;
+	jdata["unit"] = tx.data.unit;
+	jdata["price_per_unit"] = tx.data.price_per_unit;
+	jdata["currency"] = tx.data.currency;
+	jdata["timestamp"] = Json::Int64(tx.data.timestamp);
+
+	for (const auto &p : tx.data.parents)
+		jdata["parents"].append(p);
+
+	root["data"] = jdata;
+
+	// metadata
+	Json::Value jmeta;
+	jmeta["lastUpdated"] = Json::Int64(tx.metadata.lastUpdated);
+
+	// weightMap: unordered_set -> array
+	std::vector<std::string> wm(tx.metadata.weightMap.begin(), tx.metadata.weightMap.end());
+	
+	for (const auto &id : wm)
+		jmeta["weightMap"].append(id);
+
+	jmeta["cumulative_weight"] = tx.metadata.cumulative_weight;
+	jmeta["signature1"] = tx.metadata.signature1;
+	jmeta["signature2"] = tx.metadata.signature2;
+	jmeta["checksum"] = tx.metadata.checksum;
+
+	jmeta["consensusTimestamp"] = Json::Int64(tx.metadata.consensusTimestamp);
+	jmeta["consensusDuration"] = Json::Int64(tx.metadata.consensusDuration);
+
+	jmeta["verificationTimestamp"] = Json::Int64(tx.metadata.verificationTimestamp);
+	jmeta["verificationDuration"] = Json::Int64(tx.metadata.verificationDuration);
+
+	jmeta["powDuration"] = Json::Int64(tx.metadata.powDuration);
+	jmeta["tsaDuration"] = Json::Int64(tx.metadata.tsaDuration);
+	jmeta["completionDuration"] = Json::Int64(tx.metadata.completionDuration);
+
+	// hops
+	for (const auto &h : tx.metadata.hops)
+	{
+		Json::Value jh;
+		jh["timestamp"] = Json::Int64(h.first);
+		jh["uid"] = h.second;
+		jmeta["hops"].append(jh);
+	}
+
+	root["metadata"] = jmeta;
+
+	Json::StreamWriterBuilder builder;
+	if (pretty)
+		builder["indentation"] = "  ";
+	else
+		builder["indentation"] = "";
+	std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
+	std::ostringstream os;
+	writer->write(root, &os);
+	return os.str();
+}
+
+Transaction deserializeTransaction(const std::string &jsonStr){
+	Transaction tx;
+	Json::CharReaderBuilder rbuilder;
+	rbuilder["collectComments"] = false;
+	std::string errs;
+	Json::Value root;
+	std::istringstream is(jsonStr);
+	if (!Json::parseFromStream(rbuilder, is, &root, &errs))
+	{
+		throw std::invalid_argument(std::string("JSON parse error: ") + errs);
+	}
+
+	// data
+	if (root.isMember("data") && root["data"].isObject())
+	{
+		const Json::Value &jdata = root["data"];
+		if (jdata.isMember("transaction_id"))
+			tx.data.transaction_id = jdata["transaction_id"].asString();
+		if (jdata.isMember("sender"))
+			tx.data.sender = jdata["sender"].asString();
+		if (jdata.isMember("receiver"))
+			tx.data.receiver = jdata["receiver"].asString();
+		if (jdata.isMember("amount"))
+			tx.data.amount = jdata["amount"].asDouble();
+		if (jdata.isMember("unit"))
+			tx.data.unit = jdata["unit"].asString();
+		if (jdata.isMember("price_per_unit"))
+			tx.data.price_per_unit = jdata["price_per_unit"].asDouble();
+		if (jdata.isMember("currency"))
+			tx.data.currency = jdata["currency"].asString();
+		if (jdata.isMember("timestamp"))
+			tx.data.timestamp = jdata["timestamp"].asInt64();
+
+		if (jdata.isMember("parents") && jdata["parents"].isArray())
+		{
+			tx.data.parents.clear();
+			for (const auto &jp : jdata["parents"])
+				tx.data.parents.push_back(jp.asString());
+		}
+	}
+
+	// metadata
+	if (root.isMember("metadata") && root["metadata"].isObject())
+	{
+		const Json::Value &jmeta = root["metadata"];
+		if (jmeta.isMember("lastUpdated"))
+			tx.metadata.lastUpdated = jmeta["lastUpdated"].asInt64();
+
+		if (jmeta.isMember("weightMap") && jmeta["weightMap"].isArray())
+		{
+			tx.metadata.weightMap.clear();
+			for (const auto &jwm : jmeta["weightMap"])
+				tx.metadata.weightMap.insert(jwm.asString());
+		}
+
+		if (jmeta.isMember("cumulative_weight"))
+			tx.metadata.cumulative_weight = jmeta["cumulative_weight"].asInt();
+		if (jmeta.isMember("signature1"))
+			tx.metadata.signature1 = jmeta["signature1"].asString();
+		if (jmeta.isMember("signature2"))
+			tx.metadata.signature2 = jmeta["signature2"].asString();
+		if (jmeta.isMember("checksum"))
+			tx.metadata.checksum = jmeta["checksum"].asString();
+
+		if (jmeta.isMember("consensusTimestamp"))
+			tx.metadata.consensusTimestamp = jmeta["consensusTimestamp"].asInt64();
+		if (jmeta.isMember("consensusDuration"))
+			tx.metadata.consensusDuration = jmeta["consensusDuration"].asInt64();
+
+		if (jmeta.isMember("verificationTimestamp"))
+			tx.metadata.verificationTimestamp = jmeta["verificationTimestamp"].asInt64();
+		if (jmeta.isMember("verificationDuration"))
+			tx.metadata.verificationDuration = jmeta["verificationDuration"].asInt64();
+
+		if (jmeta.isMember("powDuration"))
+			tx.metadata.powDuration = jmeta["powDuration"].asInt64();
+		if (jmeta.isMember("tsaDuration"))
+			tx.metadata.tsaDuration = jmeta["tsaDuration"].asInt64();
+		if (jmeta.isMember("completionDuration"))
+			tx.metadata.completionDuration = jmeta["completionDuration"].asInt64();
+
+		if (jmeta.isMember("hops") && jmeta["hops"].isArray())
+		{
+			tx.metadata.hops.clear();
+			for (const auto &jh : jmeta["hops"])
+			{
+				if (jh.isObject() && jh.isMember("timestamp") && jh.isMember("uid"))
+				{
+					int64_t ts = jh["timestamp"].asInt64();
+					std::string uid = jh["uid"].asString();
+					tx.metadata.hops.emplace_back(ts, uid);
+				}
+				else
+				{
+					// skip malformed hop entries (or throw)
+				}
+			}
+		}
+	}
+
+	return tx;
+}
+
+string serializeTransactionData(const Transaction &tx)
+{
+	// Serialize only the tx_data part for signing/verifying
+	Json::Value root;
+	Json::Value jdata;
+
+	jdata["transaction_id"] = tx.data.transaction_id;
+	jdata["sender"] = tx.data.sender;
+	jdata["receiver"] = tx.data.receiver;
+	jdata["amount"] = tx.data.amount;
+	jdata["unit"] = tx.data.unit;
+	jdata["price_per_unit"] = tx.data.price_per_unit;
+	jdata["currency"] = tx.data.currency;
+	jdata["timestamp"] = Json::Int64(tx.data.timestamp);
+
+	for (const auto &p : tx.data.parents)
+		jdata["parents"].append(p);
+
+	root["data"] = jdata;
+
+	Json::StreamWriterBuilder builder;
+	builder["indentation"] = ""; // No pretty print for signing
+	std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
+	std::ostringstream os;
+	writer->write(root, &os);
+	return os.str();
+}

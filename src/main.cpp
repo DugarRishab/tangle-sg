@@ -179,15 +179,15 @@ void compareTransactions(const Transaction &a, const Transaction &b)
 void testSignaturePipeline(const Transaction &originalTx)
 {
 
-    std::string fullSerialized = Tangle::serializeTransaction(originalTx);
+    std::string fullSerialized = serializeTransaction(originalTx);
 
     // Step 4: Deserialize the transaction
-    Transaction deserializedTx = Tangle::deserializeTransaction(fullSerialized);
+    Transaction deserializedTx = deserializeTransaction(fullSerialized);
 
     compareTransactions(originalTx, deserializedTx);
 
     // Step 5: Serialize tx_data again after deserialization
-    std::string deserializedSerializedData = Tangle::serializeTransactionData(deserializedTx);
+    std::string deserializedSerializedData = serializeTransactionData(deserializedTx);
     // std::cout << "Deserialized tx_data serialized: " << deserializedSerializedData << "\n";
 
     // Step 6: Verify the signature
@@ -299,8 +299,8 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         cout << "[SIMULATOR] PoW Duration: " << newTx.metadata.powDuration << " ms" << endl;
         cout << "[SIMULATOR] Total Time elapsed:" << elapsed << " ms" << endl;
 
-        // auto finalDataSerialized = Tangle::serializeTransaction(newTx);
-        // auto finalDataDeSerialized = Tangle::deserializeTransaction(finalDataSerialized);
+        // auto finalDataSerialized = serializeTransaction(newTx);
+        // auto finalDataDeSerialized = deserializeTransaction(finalDataSerialized);
 
         // check if finalDataDeSerialized matches with newTx and print where the mismatch is
 

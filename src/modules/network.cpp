@@ -442,7 +442,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
 
             cout << "[HANDLER] Received new transaction from peer: " << message << endl;
             // Handle new transaction
-            Transaction newTx = Tangle::deserializeTransaction(data);
+            Transaction newTx = deserializeTransaction(data);
 
             // TODO: check sign status of tx
             if (newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
@@ -457,7 +457,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
 
                 // TODO: if the transaction is only signed by sender,
                 // add transaction to Tangle but perform PoW later
-                string txSearialized = Tangle::serializeTransactionData(newTx);
+                string txSearialized = serializeTransactionData(newTx);
                 string sig_b64 = newTx.metadata.signature1;
 
                 if (verifyTransaction(txSearialized, sig_b64, newTx.data.sender)) // Verify signature 1 is sender's signature
@@ -514,7 +514,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
             else if (!newTx.metadata.signature1.empty() && !newTx.metadata.signature2.empty())
             {
                 // TODO: verify each signature
-                string txSearialized = Tangle::serializeTransactionData(newTx);
+                string txSearialized = serializeTransactionData(newTx);
                 string sig1_b64 = newTx.metadata.signature1;
                 string sig2_b64 = newTx.metadata.signature2;
 
@@ -580,7 +580,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
 void Network::broadcastTransaction(const Transaction &Tx)
 {
     // Serialize the transaction
-    string message = Tangle::serializeTransaction(Tx);
+    string message = serializeTransaction(Tx);
     std::cout << "[SEND] Broadcasting new transaction: " << Tx.data.transaction_id << endl;
     // std::cout << "[LOG] Transaction data: " << message << endl;
 
