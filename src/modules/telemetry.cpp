@@ -331,62 +331,56 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 	Json::Value tangle_arr(Json::arrayValue);
 	for (auto &[tx_id, tx] : txs)
 	{
-		Json::Value jtx(Json::objectValue);
-
-		// ------------------------
-		// tx_data -> "data"
-		// ------------------------
-		Json::Value jdata(Json::objectValue);
+		Json::Value jtx(Json::objectValue);	
+		Json::Value jdata;
 
 		jdata["transaction_id"] = tx.data.transaction_id;
-
-		// parents array
-		Json::Value pars(Json::arrayValue);
-		for (const auto &p : tx.data.parents)
-			pars.append(p);
-		jdata["parents"] = pars;
-
-		jdata["timestamp"] = Json::Value((Json::Int64)tx.data.timestamp);
 		jdata["sender"] = tx.data.sender;
 		jdata["receiver"] = tx.data.receiver;
 		jdata["amount"] = tx.data.amount;
 		jdata["unit"] = tx.data.unit;
 		jdata["price_per_unit"] = tx.data.price_per_unit;
 		jdata["currency"] = tx.data.currency;
+		jdata["timestamp"] = Json::Int64(tx.data.timestamp);
+
+		for (const auto &p : tx.data.parents)
+			jdata["parents"].append(p);
 
 		jtx["data"] = jdata;
 
-		// ------------------------
-		// tx_metadata -> "metadata"
-		// ------------------------
-		Json::Value jmeta(Json::objectValue);
+		// metadata
+		Json::Value jmeta;
+		jmeta["lastUpdated"] = Json::Int64(tx.metadata.lastUpdated);
 
-		jmeta["lastUpdated"] = Json::Value((Json::Int64)tx.metadata.lastUpdated);
-		jmeta["cumulative_weight"] = Json::Value((Json::UInt64)tx.metadata.cumulative_weight);
+		// weightMap: unordered_set -> array
+		std::vector<std::string> wm(tx.metadata.weightMap.begin(), tx.metadata.weightMap.end());
+
+		for (const auto &id : wm)
+			jmeta["weightMap"].append(id);
+
+		jmeta["cumulative_weight"] = tx.metadata.cumulative_weight;
 		jmeta["signature1"] = tx.metadata.signature1;
 		jmeta["signature2"] = tx.metadata.signature2;
 		jmeta["checksum"] = tx.metadata.checksum;
 
-		jmeta["consensusTimestamp"] = Json::Value((Json::Int64)tx.metadata.consensusTimestamp);
-		jmeta["consensusDuration"] = Json::Value((Json::Int64)tx.metadata.consensusDuration);
+		jmeta["consensusTimestamp"] = Json::Int64(tx.metadata.consensusTimestamp);
+		jmeta["consensusDuration"] = Json::Int64(tx.metadata.consensusDuration);
 
-		jmeta["verificationTimestamp"] = Json::Value((Json::Int64)tx.metadata.verificationTimestamp);
-		jmeta["verificationDuration"] = Json::Value((Json::Int64)tx.metadata.verificationDuration);
+		jmeta["verificationTimestamp"] = Json::Int64(tx.metadata.verificationTimestamp);
+		jmeta["verificationDuration"] = Json::Int64(tx.metadata.verificationDuration);
 
-		jmeta["powDuration"] = Json::Value((Json::Int64)tx.metadata.powDuration);
-		jmeta["tsaDuration"] = Json::Value((Json::Int64)tx.metadata.tsaDuration);
-		jmeta["completionDuration"] = Json::Value((Json::Int64)tx.metadata.completionDuration);
+		jmeta["powDuration"] = Json::Int64(tx.metadata.powDuration);
+		jmeta["tsaDuration"] = Json::Int64(tx.metadata.tsaDuration);
+		jmeta["completionDuration"] = Json::Int64(tx.metadata.completionDuration);
 
-		// hops array
-		Json::Value hops_arr(Json::arrayValue);
-		for (const auto &hop : tx.metadata.hops)
+		// hops
+		for (const auto &h : tx.metadata.hops)
 		{
-			Json::Value hop_obj(Json::objectValue);
-			hop_obj["timestamp"] = Json::Value((Json::Int64)hop.first);
-			hop_obj["uid"] = hop.second;
-			hops_arr.append(hop_obj);
+			Json::Value jh;
+			jh["timestamp"] = Json::Int64(h.first);
+			jh["uid"] = h.second;
+			jmeta["hops"].append(jh);
 		}
-		jmeta["hops"] = hops_arr;
 
 		jtx["metadata"] = jmeta;
 
