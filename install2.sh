@@ -46,6 +46,12 @@ echo "[INFO] Starting install2.sh for tangle-sg"
 arch_info
 
 # ---------------------------------
+# 0) Set Env Variables
+# ---------------------------------
+export BASE_IP=${iproute get 8.8.8.8 | awk '{print $7; exit}'} # Get primary IP address
+export HMAC_SECRET=${HMAC_SECRET:-$(openssl rand -hex 32)} # Generate random HMAC secret if not set
+
+# ---------------------------------
 # 1) System packages and toolchain
 # ---------------------------------
 ${SUDO} apt-get update -y
