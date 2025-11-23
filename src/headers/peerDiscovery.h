@@ -61,14 +61,9 @@ class PeerDiscovery
 		std::string UID_A; // Unique identifier for this node
 
 		std::thread responderThread_;
+		std::thread discoveryThread_;
+		void discoveryLoop();
 
-		uint64_t generateNonce();
-		std::string computeHMAC(const std::string &data);
-		void sendUDPPacket(const std::string &data, const sockaddr_in &addr);
-
-		// Discovery
-		void sendUDPBroadcast(const std::string &data);
-		// std::vector<Peer> listenDiscovery(int maxPeers, int maxTimeLimitMs);
 
 		// Handshake phases
 		bool performHandshake(Peer p);

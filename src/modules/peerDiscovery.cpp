@@ -141,6 +141,8 @@ PeerDiscovery::~PeerDiscovery()
 	running_ = false;
 	if (responderThread_.joinable())
 		responderThread_.join();
+	if (discoveryThread_.joinable())
+		discoveryThread_.join();
 	close(sock);
 }
 
@@ -148,7 +150,7 @@ void PeerDiscovery::start()
 {
 	running_ = true;
 	responderThread_ = std::thread(&PeerDiscovery::responderLoop, this);
-	findPeers(5, 10000); // Start discovery with max 5 peers and 10s timeout
+	discoveryThread_ = std::thread(&PeerDiscovery::discoveryLoop, this);
 }
 
 void PeerDiscovery::Stop()
@@ -156,6 +158,8 @@ void PeerDiscovery::Stop()
 	running_ = false;
 	if (responderThread_.joinable())
 		responderThread_.join();
+	if (discoveryThread_.joinable())
+		discoveryThread_.join();
 	close(sock);
 }
 
@@ -394,4 +398,24 @@ void PeerDiscovery::responderLoop()
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	}
+}
+
+void PeerDiscovery::discoveryLoop()
+{
+	std::cout << "[PD] Discovery loop started.\n";
+	while (running_)
+	{
+        // Always try to discover more peers to ensure full network connectivity
+        // The MAX_PEERS limit only applies to gossip fan-out, not connections.
+        std::cout << "[PD] Periodic discovery check. Current peers: " << peers.countPeers() << ". Starting discovery.\n";
+        findPeers(5, 5000); // Discover 5 peers at a time
+		
+		// Sleep for a while before next check
+		// Use small sleep steps to allow quick shutdown
+		for (int i = 0; i < 100; ++i) {
+			if (!running_) break;
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
+	}
+	std::cout << "[PD] Discovery loop stopped.\n";
 }
