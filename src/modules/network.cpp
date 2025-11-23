@@ -444,6 +444,37 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
             // Handle new transaction
             Transaction newTx = deserializeTransaction(data);
 
+            // Check for missing parents
+            bool missingParent = false;
+            for (const auto &parent : newTx.data.parents)
+            {
+                if (!tangle.transactionPresent(const_cast<Transaction&>(tangle.getTransaction(const_cast<std::string&>(parent)))) && parent != "genesis")
+                {
+                    // Check if parent is actually missing or just not found by getTransaction (which logs error)
+                    // Better way: check if it exists in map directly or use a helper that doesn't log error
+                    // For now, assuming getTransaction returns empty tx if not found, but Tangle::getTransaction logs error.
+                    // Let's use a new helper or just rely on the fact that if it's not in tangle, we need it.
+                    // Actually Tangle::transactionPresent takes a Transaction object, which is weird.
+                    // Let's assume we need to implement a proper check.
+                    // For now, let's try to get it, and if ID is empty, it's missing.
+                    // Wait, Tangle::getTransaction returns empty tx if not found.
+                    std::string p = parent;
+                    Transaction pTx = tangle.getTransaction(p);
+                    if (pTx.data.transaction_id.empty()) {
+                        std::cout << "[ORPHAN] Transaction " << newTx.data.transaction_id << " missing parent " << parent << ". Queuing as orphan." << std::endl;
+                        
+                        std::lock_guard<std::mutex> lock(orphansMutex);
+                        orphans[parent].push_back(newTx);
+                        missingParent = true;
+                        
+                        // Request the missing parent
+                        requestTransaction(parent, peer);
+                    }
+                }
+            }
+
+            if (missingParent) return;
+
             // TODO: check sign status of tx
             if (newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
             {
@@ -542,7 +573,7 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     cout << "[HANDLER] Transaction already exists in Tangle. Updating it." << endl;
                     broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
                 }
-                else
+                if (isTxPresent == 2)
                 {
                     cout << "[HANDLER] Transaction added to Tangle. Broadcasting." << endl;
                     // perform PoW on the transaction
@@ -551,6 +582,9 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
 
                     broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
+                    
+                    // Process any orphans waiting for this transaction
+                    processOrphans(newTx.data.transaction_id);
                 }
             }
         }
@@ -569,6 +603,18 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
             string timestamp = jsonData["timestamp"].asString();
 
             handleTangleUpdate(data);
+        }
+        if (messageType == "TX_REQ")
+        {
+            string txId = jsonData["data"].asString();
+            cout << "[HANDLER] Received TX_REQ for " << txId << ". Sending transaction." << endl;
+            std::string id = txId;
+            Transaction tx = tangle.getTransaction(id);
+            if (!tx.data.transaction_id.empty()) {
+                sendMessage(serializeTransaction(tx), "NEWTX", peer);
+            } else {
+                cerr << "[HANDLER][ERROR] Requested transaction " << txId << " not found." << endl;
+            }
         }
     }
     else
@@ -710,12 +756,12 @@ void Network::sendMessage(const string &message, const string &messageType, Peer
 
     try
     {
-        // if (peer.state == ConnectionState::OPEN)
-        // {
-        //     client->send(hdl, fullMessage, websocketpp::frame::opcode::text);
-        //     cout << "[LOG][SEND] Sent message to peer: " << fullMessage << endl;
-        //     return;
-        // }
+        if (peer.state == ConnectionState::OPEN)
+        {
+            client->send(hdl, fullMessage, websocketpp::frame::opcode::text);
+            cout << "[LOG][SEND] Sent message to peer: " << fullMessage << endl;
+            return;
+        }
         Message msg = {fullMessage, websocketpp::frame::opcode::text};
         peers.enqueueMessage(peer.uri, msg);
 
@@ -726,5 +772,75 @@ void Network::sendMessage(const string &message, const string &messageType, Peer
     catch (const std::exception &e)
     {
         std::cerr << "[SEND][ERROR]" << e.what() << '\n';
+    }
+}
+
+void Network::requestTransaction(const std::string &txId, Peer &peer)
+{
+    Json::Value jsonData;
+    jsonData["data"] = txId;
+    jsonData["checksum"] = "0"; // Not needed for simple ID
+    jsonData["timestamp"] = std::to_string(std::time(nullptr));
+
+    Json::StreamWriterBuilder writer;
+    string jsonString = Json::writeString(writer, jsonData);
+    sendMessage(jsonString, "TX_REQ", peer);
+    std::cout << "[ORPHAN] Requested missing transaction " << txId << " from peer " << peer.id << std::endl;
+}
+
+void Network::processOrphans(const std::string &parentId)
+{
+    std::lock_guard<std::mutex> lock(orphansMutex);
+    auto it = orphans.find(parentId);
+    if (it != orphans.end())
+    {
+        std::cout << "[ORPHAN] Processing " << it->second.size() << " orphans for parent " << parentId << std::endl;
+        std::vector<Transaction> readyToProcess;
+        
+        // Check which orphans are now ready (all parents present)
+        auto &orphanList = it->second;
+        for (auto listIt = orphanList.begin(); listIt != orphanList.end(); )
+        {
+            bool allParentsPresent = true;
+            for (const auto &p : listIt->data.parents)
+            {
+                std::string pStr = p;
+                if (tangle.getTransaction(pStr).data.transaction_id.empty() && p != "genesis")
+                {
+                    allParentsPresent = false;
+                    break;
+                }
+            }
+
+            if (allParentsPresent)
+            {
+                readyToProcess.push_back(*listIt);
+                listIt = orphanList.erase(listIt);
+            }
+            else
+            {
+                ++listIt;
+            }
+        }
+
+        if (orphanList.empty())
+        {
+            orphans.erase(it);
+        }
+
+        // Process the ready orphans (re-inject them as if they just arrived)
+        
+        for (auto &tx : readyToProcess)
+        {
+             std::cout << "[ORPHAN] Un-orphaning transaction " << tx.data.transaction_id << std::endl;
+             
+             int isTxPresent = tangle.addTransaction(tx, 1);
+             if (isTxPresent == 2) {
+                 performPoW(tx.data.transaction_id);
+                 tangle.updateCumulativeWeight(tx.data.transaction_id);
+                 broadcastTransaction(tangle.getTransaction(tx.data.transaction_id));
+                 processOrphans(tx.data.transaction_id); // Recursive call
+             }
+        }
     }
 }
