@@ -64,6 +64,11 @@ class PeerDiscovery
 		std::thread discoveryThread_;
 		void discoveryLoop();
 
+		// Helper methods
+		uint64_t generateNonce();
+		std::string computeHMAC(const std::string &data);
+		void sendUDPPacket(const std::string &data, const sockaddr_in &addr);
+		void sendUDPBroadcast(const std::string &data);
 
 		// Handshake phases
 		bool performHandshake(Peer p);
