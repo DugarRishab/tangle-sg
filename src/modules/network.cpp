@@ -448,18 +448,9 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
             bool missingParent = false;
             for (const auto &parent : newTx.data.parents)
             {
-                if (!tangle.transactionPresent(const_cast<Transaction&>(tangle.getTransaction(const_cast<std::string&>(parent)))) && parent != "genesis")
+                Transaction pTx = tangle.getTransaction(parent);
+                if (!tangle.transactionPresent(pTx) && parent != "genesis")
                 {
-                    // Check if parent is actually missing or just not found by getTransaction (which logs error)
-                    // Better way: check if it exists in map directly or use a helper that doesn't log error
-                    // For now, assuming getTransaction returns empty tx if not found, but Tangle::getTransaction logs error.
-                    // Let's use a new helper or just rely on the fact that if it's not in tangle, we need it.
-                    // Actually Tangle::transactionPresent takes a Transaction object, which is weird.
-                    // Let's assume we need to implement a proper check.
-                    // For now, let's try to get it, and if ID is empty, it's missing.
-                    // Wait, Tangle::getTransaction returns empty tx if not found.
-                    std::string p = parent;
-                    Transaction pTx = tangle.getTransaction(p);
                     if (pTx.data.transaction_id.empty()) {
                         std::cout << "[ORPHAN] Transaction " << newTx.data.transaction_id << " missing parent " << parent << ". Queuing as orphan." << std::endl;
                         
