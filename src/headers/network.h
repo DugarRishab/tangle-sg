@@ -1,10 +1,15 @@
 #ifndef NETWORK_H
 #define NETWORK_H
+
 #include "transaction.h"
 #include "tangle.h"
 #include "peers2.h"
 
 #include <string>
+#include <thread>
+#include <atomic>
+#include <unordered_map>
+#include <mutex>
 
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
@@ -13,30 +18,12 @@
 using namespace std;
 
 using WsClient = websocketpp::client<websocketpp::config::asio_client>;
+using WsServer = websocketpp::server<websocketpp::config::asio>;
 using ConnectionHdl = websocketpp::connection_hdl;
-	Network(uint16_t wsPort, Tangle &tangle, Peers &peers);
-	~Network();
 
-	void broadcastTransaction(const Transaction &Tx);
-	void sendTangle(Peer& peer);
-	void handleTangleUpdate(std::string receivedData);
-	void handleIncomingMessage(Peer& peer, const std::string &payload);
-#ifndef NETWORK_H
-#define NETWORK_H
-#include "transaction.h"
-#include "tangle.h"
-#include "peers2.h"
-
-#include <string>
-
-#include <websocketpp/config/asio_no_tls.hpp>
-#include <websocketpp/server.hpp>
-#include <websocketpp/client.hpp>
-
-using namespace std;
-
-using WsClient = websocketpp::client<websocketpp::config::asio_client>;
-using ConnectionHdl = websocketpp::connection_hdl;
+class Network
+{
+public:
 	Network(uint16_t wsPort, Tangle &tangle, Peers &peers);
 	~Network();
 
@@ -63,18 +50,16 @@ private:
 	std::atomic<bool> monitorRunning_{false};
 
 	Tangle &tangle;
-	Peers &peers; // Reference to Peers object
+	Peers &peers;
 
 	void initClient();
 	void initServer();
 
-    // Orphan Pool
-    std::unordered_map<std::string, std::vector<Transaction>> orphans;
-    std::mutex orphansMutex;
-    void requestTransaction(const std::string &txId, Peer &peer);
-    void processOrphans(const std::string &parentId);
+	// Orphan Pool
+	std::unordered_map<std::string, std::vector<Transaction>> orphans;
+	std::mutex orphansMutex;
+	void requestTransaction(const std::string &txId, Peer &peer);
+	void processOrphans(const std::string &parentId);
 };
 
-// void startServer(Tangle& tangle);
-
-#endif
+#endif // NETWORK_H
