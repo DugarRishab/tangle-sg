@@ -448,7 +448,8 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
             bool missingParent = false;
             for (const auto &parent : newTx.data.parents)
             {
-                Transaction pTx = tangle.getTransaction(parent);
+                std::string parentId = parent;
+                Transaction pTx = tangle.getTransaction(parentId);
                 if (!tangle.transactionPresent(pTx) && parent != "genesis")
                 {
                     if (pTx.data.transaction_id.empty()) {
