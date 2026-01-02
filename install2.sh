@@ -48,7 +48,7 @@ arch_info
 # ---------------------------------
 # 0) Set Env Variables
 # ---------------------------------
-export BASE_IP=${iproute get 8.8.8.8 | awk '{print $7; exit}'} # Get primary IP address
+export BASE_IP=$(ip route get 8.8.8.8 | awk '{print $7; exit}') # Get primary IP address
 export HMAC_SECRET=${HMAC_SECRET:-$(openssl rand -hex 32)} # Generate random HMAC secret if not set
 
 # ---------------------------------
@@ -171,7 +171,7 @@ fi
 # ----------------
 # 5) Final notes
 # ----------------
-echo "\n[DONE] tangle-sg installed."
+echo -e "\n[DONE] tangle-sg installed."
 echo "- Binary: ${PROJECT_DIR}/tangle_poc"
 echo "- Env: ${ENV_FILE}"
 if [ "${INSTALL2_NO_SYSTEMD}" != "1" ]; then
