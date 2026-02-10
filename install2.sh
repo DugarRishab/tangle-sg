@@ -49,7 +49,15 @@ arch_info
 # 0) Set Env Variables
 # ---------------------------------
 export BASE_IP=$(ip route get 8.8.8.8 | awk '{print $7; exit}') # Get primary IP address
-export HMAC_SECRET=${HMAC_SECRET:-$(openssl rand -hex 32)} # Generate random HMAC secret if not set
+
+# Check if HMAC_SECRET is set - must be the same for all nodes in the cluster
+if [ -z "${HMAC_SECRET}" ]; then
+  echo "[ERROR] HMAC_SECRET must be set and be the same across all nodes in your cluster." >&2
+  echo "[ERROR] Please export HMAC_SECRET before running this script:" >&2
+  echo "[ERROR]   export HMAC_SECRET='your-shared-secret-key-here'" >&2
+  echo "[ERROR]   ./install2.sh" >&2
+  exit 1
+fi
 
 # ---------------------------------
 # 1) System packages and toolchain
@@ -106,6 +114,7 @@ fi
 ${SUDO} mkdir -p "$(dirname "${ENV_FILE}")"
 {
   echo "# Environment for ${SERVICE_NAME}"
+  echo "# IMPORTANT: HMAC_SECRET must be identical across all nodes in the cluster"
   echo "BASE_IP=${BASE_IP}"
   echo "HMAC_SECRET=${HMAC_SECRET}"
   echo "TX_COUNT=${TX_COUNT}"
