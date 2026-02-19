@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 # Standalone installer for tangle-sg on Raspberry Pi (or any Debian-based ARM host)
@@ -23,7 +23,7 @@ set -euo pipefail
 : "${MONITOR_PERIOD:=5}"
 : "${TELEMETRY_ENDPOINT:=}"
 : "${BASE_IP:=}"
-: "${HMAC_SECRET:=}"
+: "${HMAC_SECRET:=tangle-sg-shared-hmac-secret-12345}"
 
 need_sudo() {
   if [ "${EUID}" -ne 0 ]; then echo "sudo"; else echo ""; fi
@@ -50,14 +50,7 @@ arch_info
 # ---------------------------------
 export BASE_IP=$(ip route get 8.8.8.8 | awk '{print $7; exit}') # Get primary IP address
 
-# Check if HMAC_SECRET is set - must be the same for all nodes in the cluster
-if [ -z "${HMAC_SECRET}" ]; then
-  echo "[ERROR] HMAC_SECRET must be set and be the same across all nodes in your cluster." >&2
-  echo "[ERROR] Please export HMAC_SECRET before running this script:" >&2
-  echo "[ERROR]   export HMAC_SECRET='your-shared-secret-key-here'" >&2
-  echo "[ERROR]   ./install2.sh" >&2
-  exit 1
-fi
+
 
 # ---------------------------------
 # 1) System packages and toolchain
@@ -101,14 +94,7 @@ if [ -z "${BASE_IP}" ]; then
   echo "[WARN] Could not auto-detect BASE_IP. Please export BASE_IP=xxx.xxx.xxx.xxx and re-run if peer discovery should work."
 fi
 
-# Generate HMAC secret if not provided
-if [ -z "${HMAC_SECRET}" ]; then
-  if command -v openssl >/dev/null 2>&1; then
-    HMAC_SECRET=$(openssl rand -hex 32)
-  else
-    HMAC_SECRET=$(dd if=/dev/urandom bs=32 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n')
-  fi
-fi
+
 
 # Write /etc/default/tangle-sg
 ${SUDO} mkdir -p "$(dirname "${ENV_FILE}")"
