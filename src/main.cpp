@@ -49,6 +49,10 @@ void signalHandler(int signo)
 static Tangle* g_tangle_ptr = nullptr;
 static std::string g_snapshot_filename = "tangle_state.csv";
 
+// Forward declaration
+void saveTangleToCSV(std::unordered_map<std::string, Transaction> transactions,
+                     const std::string &filename);
+
 void saveSnapshotOnShutdown()
 {
     if (g_tangle_ptr != nullptr) {
