@@ -381,7 +381,6 @@ void Network::handleTangleUpdate(std::string receivedData)
     if (!receivedData.empty())
     {
         {
-
             tangle.updateFromSerialized(receivedData);
         }
         cout << "[LOG] Tangle update verified and applied." << endl;
@@ -395,265 +394,282 @@ void Network::handleTangleUpdate(std::string receivedData)
 
 void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
 {
-    size_t pos = payload.find("::TYPE::");
-    if (pos != string::npos)
+    try
     {
-        string messageType = payload.substr(0, pos);
-        string message = payload.substr(pos + 8);
-        // parse the message assuming it is in JSON format. seperate tangle, checksum, and timestamp
-        Json::Value jsonData;
-        Json::CharReaderBuilder reader;
-        std::istringstream s(message);
-        std::string errs;
-
-        const bool isValidJson = Json::parseFromStream(reader, s, &jsonData, &errs);
-
-        if (isValidJson && jsonData.isObject())
+        size_t pos = payload.find("::TYPE::");
+        if (pos != string::npos)
         {
+            string messageType = payload.substr(0, pos);
+            string message = payload.substr(pos + 8);
+            // parse the message assuming it is in JSON format. seperate tangle, checksum, and timestamp
+            Json::Value jsonData;
+            Json::CharReaderBuilder reader;
+            std::istringstream s(message);
+            std::string errs;
 
-            // Extract tangle data
-            string data = jsonData["data"].asString();
-            string checksum = jsonData["checksum"].asString();
-            string timestamp = jsonData["timestamp"].asString();
+            const bool isValidJson = Json::parseFromStream(reader, s, &jsonData, &errs);
 
-            // Verify checksum
-            if (verifyChecksum(data, checksum))
+            if (isValidJson && jsonData.isObject())
             {
-                cout << "[HANDLER] Received valid message from peer." << endl;
-                // handleTCPClient(data + " " + checksum, tangle);
+
+                // Extract tangle data
+                string data = jsonData["data"].asString();
+                string checksum = jsonData["checksum"].asString();
+                string timestamp = jsonData["timestamp"].asString();
+
+                // Verify checksum
+                if (verifyChecksum(data, checksum))
+                {
+                    cout << "[HANDLER] Received valid message from peer." << endl;
+                    // handleTCPClient(data + " " + checksum, tangle);
+                }
+                else
+                {
+                    cerr << "[HANDLER][ERROR] Checksum verification failed for received message data." << endl;
+                    return;
+                }
             }
             else
             {
-                cerr << "[HANDLER][ERROR] Checksum verification failed for received message data." << endl;
+                cerr << "[HANDLER][ERROR] Failed to parse JSON message: " << errs << endl;
                 return;
+            }
+
+            if (messageType == "NEWTX")
+            {
+                try
+                {
+                    string data = jsonData["data"].asString();
+                    string checksum = jsonData["checksum"].asString();
+                    string timestamp = jsonData["timestamp"].asString();
+
+                    cout << "[HANDLER] Received new transaction from peer: " << message << endl;
+                    // Handle new transaction
+                    Transaction newTx = deserializeTransaction(data);
+
+                    // Check for missing parents
+                    bool missingParent = false;
+                    for (const auto &parent : newTx.data.parents)
+                    {
+                        std::string parentId = parent;
+                        Transaction pTx = tangle.getTransaction(parentId);
+                        if (!tangle.transactionPresent(pTx) && parent != "genesis")
+                        {
+                            if (pTx.data.transaction_id.empty()) {
+                                std::cout << "[ORPHAN] Transaction " << newTx.data.transaction_id << " missing parent " << parent << ". Queuing as orphan." << std::endl;
+
+                                std::lock_guard<std::mutex> lock(orphansMutex);
+                                orphans[parent].push_back(newTx);
+                                missingParent = true;
+
+                                // Request the missing parent
+                                requestTransaction(parent, peer);
+                            }
+                        }
+                    }
+
+                    if (missingParent) return;
+
+                    // TODO: check sign status of tx
+                    if (newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
+                    {
+                        cerr << "[HANDLER][ERROR] Transaction is not signed. Cannot add to Tangle." << endl;
+                        return;
+                    }
+                    // single signed transaction
+                    else if (!newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
+                    {
+                        cout << "[HANDLER] Transaction is only single signed." << endl;
+
+                        // TODO: if the transaction is only signed by sender,
+                        // add transaction to Tangle but perform PoW later
+                        string txSearialized = serializeTransactionData(newTx);
+                        string sig_b64 = newTx.metadata.signature1;
+
+                        if (verifyTransaction(txSearialized, sig_b64, newTx.data.sender)) // Verify signature 1 is sender's signature
+                        {
+                            cout << "[HANDLER] Transaction is signed by sender." << endl;
+                            // If the transaction is only signed by sender, we can add it to the Tangle
+                            // but we need to perform PoW later
+                        }
+                        else
+                        {
+                            cerr << "[HANDLER][ERROR] Transaction signature 1 verification failed for sender." << endl;
+                            return;
+                        }
+                        int isTxPresent = tangle.addTransaction(newTx, 1);
+                        Transaction tx = tangle.getTransaction(newTx.data.transaction_id);
+                        // check if the receiver is same as the host node.
+                        if (isTxPresent == 0)
+                        {
+                            cout << "[HANDLER] Transaction already exists in Tangle. No Updates. Not broadcasting." << endl;
+                            return;
+                        }
+                        if (isTxPresent == 1)
+                        {
+                            cout << "[HANDLER] Transaction already exists in Tangle. Updating it." << endl;
+
+                            broadcastTransaction(tangle.getTransaction(tx.data.transaction_id));
+                        }
+                        if (isTxPresent == 2)
+                        {
+                            cout << "[HANDLER] Transaction added to Tangle. Broadcasting." << endl;
+
+                            const std::string uid = getenv("UID");
+                            // If yes, that means this node (the host node) is the receiver and must doubly sign the transaction
+                            if (tx.data.receiver == uid) // If receiver is the host node
+                            {
+                                cout << "[HANDLER] Transaction is for this node. Double signing it." << endl;
+                                // Sign the transaction with the receiver's signature
+                                tx.metadata.signature2 = signTransaction(txSearialized);
+                                // perform PoW on the transaction
+                                performPoW(tx.data.transaction_id);
+                                tx.metadata.lastUpdated = timeNow();
+                                tx.metadata.verificationTimestamp = timeNow();
+                                tx.metadata.verificationDuration = timeNow() - tx.data.timestamp;
+
+                                tangle.updateTransaction(tx);
+                                tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
+                                                                                       // Update the transaction in Tangle
+                            }
+                            broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
+                        }
+                    }
+                    // double signed transaction
+                    else if (!newTx.metadata.signature1.empty() && !newTx.metadata.signature2.empty())
+                    {
+                        // TODO: verify each signature
+                        string txSearialized = serializeTransactionData(newTx);
+                        string sig1_b64 = newTx.metadata.signature1;
+                        string sig2_b64 = newTx.metadata.signature2;
+
+                        if (verifyTransaction(txSearialized, sig1_b64, newTx.data.sender) &&
+                            verifyTransaction(txSearialized, sig2_b64, newTx.data.receiver)) // Verify both signatures
+                        {
+                            cout << "[HANDLER] Transaction is double signed by sender and receiver. Adding to Tangle." << endl;
+                        }
+                        else
+                        {
+                            cerr << "[HANDLER][ERROR] Transaction signature verification failed." << endl;
+                            return;
+                        }
+
+                        int isTxPresent = tangle.addTransaction(newTx, 1);
+                        Transaction tx = tangle.getTransaction(newTx.data.transaction_id);
+                        // check if the receiver is same as the host node.
+                        if (isTxPresent == 0)
+                        {
+                            cout << "[HANDLER] Transaction already exists in Tangle. No Updates. Not broadcasting." << endl;
+                            return;
+                        }
+                        if (isTxPresent == 1)
+                        {
+                            cout << "[HANDLER] Transaction already exists in Tangle. Updating it." << endl;
+                            broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
+                        }
+                        if (isTxPresent == 2)
+                        {
+                            cout << "[HANDLER] Transaction added to Tangle. Broadcasting." << endl;
+                            // perform PoW on the transaction
+                            performPoW(tx.data.transaction_id);
+
+                            tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
+
+                            broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
+
+                            // Process any orphans waiting for this transaction
+                            processOrphans(newTx.data.transaction_id);
+                        }
+                    }
+                }
+                catch (const std::exception &e)
+                {
+                    std::cerr << "[HANDLER][ERROR] Exception handling NEWTX: " << e.what() << std::endl;
+                }
+                catch (...)
+                {
+                    std::cerr << "[HANDLER][ERROR] Unknown exception handling NEWTX" << std::endl;
+                }
+            }
+            if (messageType == "SYNC_REQ")
+            {
+                cout << "[HANDLER] Received SYNC_REQ from peer. Sending Tangle data." << endl;
+                // Respond with Tangle data
+                sendTangle(peer);
+            }
+            if (messageType == "SYNC_ACK")
+            {
+                cout << "[HANDLER] Received SYNC_ACK from peer. Tangle data synchronized." << endl;
+                // TODO: accept tangle data from peer
+                string data = jsonData["data"].asString();
+                string checksum = jsonData["checksum"].asString();
+                string timestamp = jsonData["timestamp"].asString();
+
+                handleTangleUpdate(data);
+            }
+            if (messageType == "TX_REQ")
+            {
+                try
+                {
+                    string txId = jsonData["data"].asString();
+                    cout << "[HANDLER] Received TX_REQ for " << txId << ". Sending transaction." << endl;
+                    std::string id = txId;
+                    Transaction tx = tangle.getTransaction(id);
+                    if (!tx.data.transaction_id.empty()) {
+                        sendMessage(serializeTransaction(tx), "NEWTX", peer);
+                    } else {
+                        cerr << "[HANDLER][ERROR] Requested transaction " << txId << " not found." << endl;
+                    }
+                }
+                catch (const std::exception &e)
+                {
+                    std::cerr << "[HANDLER][ERROR] Exception handling TX_REQ: " << e.what() << std::endl;
+                }
             }
         }
         else
         {
-            cerr << "[HANDLER][ERROR] Failed to parse JSON message: " << errs << endl;
-            return;
-        }
-
-        if (messageType == "NEWTX")
-        {
-            string data = jsonData["data"].asString();
-            string checksum = jsonData["checksum"].asString();
-            string timestamp = jsonData["timestamp"].asString();
-
-            cout << "[HANDLER] Received new transaction from peer: " << message << endl;
-            // Handle new transaction
-            Transaction newTx = deserializeTransaction(data);
-
-            // Check for missing parents
-            bool missingParent = false;
-            for (const auto &parent : newTx.data.parents)
-            {
-                std::string parentId = parent;
-                Transaction pTx = tangle.getTransaction(parentId);
-                if (!tangle.transactionPresent(pTx) && parent != "genesis")
-                {
-                    if (pTx.data.transaction_id.empty()) {
-                        std::cout << "[ORPHAN] Transaction " << newTx.data.transaction_id << " missing parent " << parent << ". Queuing as orphan." << std::endl;
-                        
-                        std::lock_guard<std::mutex> lock(orphansMutex);
-                        orphans[parent].push_back(newTx);
-                        missingParent = true;
-                        
-                        // Request the missing parent
-                        requestTransaction(parent, peer);
-                    }
-                }
-            }
-
-            if (missingParent) return;
-
-            // TODO: check sign status of tx
-            if (newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
-            {
-                cerr << "[HANDLER][ERROR] Transaction is not signed. Cannot add to Tangle." << endl;
-                return;
-            }
-            // single signed transaction
-            else if (!newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
-            {
-                cout << "[HANDLER] Transaction is only single signed." << endl;
-
-                // TODO: if the transaction is only signed by sender,
-                // add transaction to Tangle but perform PoW later
-                string txSearialized = serializeTransactionData(newTx);
-                string sig_b64 = newTx.metadata.signature1;
-
-                if (verifyTransaction(txSearialized, sig_b64, newTx.data.sender)) // Verify signature 1 is sender's signature
-                {
-                    cout << "[HANDLER] Transaction is signed by sender." << endl;
-                    // If the transaction is only signed by sender, we can add it to the Tangle
-                    // but we need to perform PoW later
-                }
-                else
-                {
-                    cerr << "[HANDLER][ERROR] Transaction signature 1 verification failed for sender." << endl;
-                    return;
-                }
-                int isTxPresent = tangle.addTransaction(newTx, 1);
-                Transaction tx = tangle.getTransaction(newTx.data.transaction_id);
-                // check if the receiver is same as the host node.
-                if (isTxPresent == 0)
-                {
-                    cout << "[HANDLER] Transaction already exists in Tangle. No Updates. Not broadcasting." << endl;
-                    return;
-                }
-                if (isTxPresent == 1)
-                {
-                    cout << "[HANDLER] Transaction already exists in Tangle. Updating it." << endl;
-
-                    broadcastTransaction(tangle.getTransaction(tx.data.transaction_id));
-                }
-                if (isTxPresent == 2)
-                {
-                    cout << "[HANDLER] Transaction added to Tangle. Broadcasting." << endl;
-
-                    const std::string uid = getenv("UID");
-                    // If yes, that means this node (the host node) is the receiver and must doubly sign the transaction
-                    if (tx.data.receiver == uid) // If receiver is the host node
-                    {
-                        // verify tx data against own meter data -> not possible here in docknet
-                        cout << "[HANDLER] Transaction is for this node. Double signing it." << endl;
-                        // Sign the transaction with the receiver's signature
-                        tx.metadata.signature2 = signTransaction(txSearialized);
-                        // perform PoW on the transaction
-                        performPoW(tx.data.transaction_id);
-                        tx.metadata.lastUpdated = timeNow();
-                        tx.metadata.verificationTimestamp = timeNow();
-                        tx.metadata.verificationDuration = timeNow() - tx.data.timestamp;
-
-                        tangle.updateTransaction(tx);
-                        tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
-                                                                               // Update the transaction in Tangle
-                    }
-                    broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
-                }
-            }
-            // double signed transaction
-            else if (!newTx.metadata.signature1.empty() && !newTx.metadata.signature2.empty())
-            {
-                // TODO: verify each signature
-                string txSearialized = serializeTransactionData(newTx);
-                string sig1_b64 = newTx.metadata.signature1;
-                string sig2_b64 = newTx.metadata.signature2;
-
-                if (verifyTransaction(txSearialized, sig1_b64, newTx.data.sender) &&
-                    verifyTransaction(txSearialized, sig2_b64, newTx.data.receiver)) // Verify both signatures
-                {
-                    cout << "[HANDLER] Transaction is double signed by sender and receiver. Adding to Tangle." << endl;
-                }
-                else
-                {
-                    cerr << "[HANDLER][ERROR] Transaction signature verification failed." << endl;
-                    return;
-                }
-
-                int isTxPresent = tangle.addTransaction(newTx, 1);
-                Transaction tx = tangle.getTransaction(newTx.data.transaction_id);
-                // check if the receiver is same as the host node.
-                if (isTxPresent == 0)
-                {
-                    cout << "[HANDLER] Transaction already exists in Tangle. No Updates. Not broadcasting." << endl;
-                    return;
-                }
-                if (isTxPresent == 1)
-                {
-                    cout << "[HANDLER] Transaction already exists in Tangle. Updating it." << endl;
-                    broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
-                }
-                if (isTxPresent == 2)
-                {
-                    cout << "[HANDLER] Transaction added to Tangle. Broadcasting." << endl;
-                    // perform PoW on the transaction
-                    performPoW(tx.data.transaction_id);
-
-                    tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
-
-                    broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
-                    
-                    // Process any orphans waiting for this transaction
-                    processOrphans(newTx.data.transaction_id);
-                }
-            }
-        }
-        if (messageType == "SYNC_REQ")
-        {
-            cout << "[HANDLER] Received SYNC_REQ from peer. Sending Tangle data." << endl;
-            // Respond with Tangle data
-            sendTangle(peer);
-        }
-        if (messageType == "SYNC_ACK")
-        {
-            cout << "[HANDLER] Received SYNC_ACK from peer. Tangle data synchronized." << endl;
-            // TODO: accept tangle data from peer
-            string data = jsonData["data"].asString();
-            string checksum = jsonData["checksum"].asString();
-            string timestamp = jsonData["timestamp"].asString();
-
-            handleTangleUpdate(data);
-        }
-        if (messageType == "TX_REQ")
-        {
-            string txId = jsonData["data"].asString();
-            cout << "[HANDLER] Received TX_REQ for " << txId << ". Sending transaction." << endl;
-            std::string id = txId;
-            Transaction tx = tangle.getTransaction(id);
-            if (!tx.data.transaction_id.empty()) {
-                sendMessage(serializeTransaction(tx), "NEWTX", peer);
-            } else {
-                cerr << "[HANDLER][ERROR] Requested transaction " << txId << " not found." << endl;
-            }
+            cerr << "[ERROR] Invalid message format received: " << payload << endl;
         }
     }
-    else
+    catch (const std::exception &e)
     {
-        cerr << "[ERROR] Invalid message format received: " << payload << endl;
+        std::cerr << "[HANDLER][ERROR] Exception in handleIncomingMessage: " << e.what() << std::endl;
+    }
+    catch (...)
+    {
+        std::cerr << "[HANDLER][ERROR] Unknown exception in handleIncomingMessage" << std::endl;
     }
 }
 
 void Network::broadcastTransaction(const Transaction &Tx)
 {
-    // Serialize the transaction
-    string message = serializeTransaction(Tx);
-    std::cout << "[SEND] Broadcasting new transaction: " << Tx.data.transaction_id << endl;
-    // std::cout << "[LOG] Transaction data: " << message << endl;
+    try
+    {
+        // Serialize the transaction
+        string message = serializeTransaction(Tx);
+        std::cout << "[SEND] Broadcasting new transaction: " << Tx.data.transaction_id << endl;
 
-    string checksum = computeChecksum(message);
+        string checksum = computeChecksum(message);
 
-    // create a JSON object using JSON-CPP
-    Json::Value jsonData;
-    jsonData["data"] = message;
-    jsonData["checksum"] = checksum;
-    jsonData["timestamp"] = std::to_string(std::time(nullptr));
+        // create a JSON object using JSON-CPP
+        Json::Value jsonData;
+        jsonData["data"] = message;
+        jsonData["checksum"] = checksum;
+        jsonData["timestamp"] = std::to_string(std::time(nullptr));
 
-    Json::StreamWriterBuilder writer;
-    string jsonString = Json::writeString(writer, jsonData);
-    // cout << "[LOG] Transaction JSON: " << jsonString << endl;
-    broadcastMessage(jsonString, "NEWTX");
-}
-
-void Network::sendTangle(Peer &peer)
-{
-    // Serialize the Tangle
-    string message = tangle.serialize();
-    string checksum = computeChecksum(message);
-
-    // create a JSON object using JSON-CPP
-    Json::Value jsonData;
-    jsonData["data"] = message;
-    jsonData["checksum"] = checksum;
-    jsonData["timestamp"] = std::to_string(std::time(nullptr));
-
-    Json::StreamWriterBuilder writer;
-    string jsonString = Json::writeString(writer, jsonData);
-
-    sendMessage(jsonString, "SYNC_ACK", peer);
-
-    cout << "[SYNC_ACK] Sent Tangle to peer ." << endl;
+        Json::StreamWriterBuilder writer;
+        string jsonString = Json::writeString(writer, jsonData);
+        broadcastMessage(jsonString, "NEWTX");
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "[BROADCAST][ERROR] Exception broadcasting transaction: " << e.what() << std::endl;
+    }
+    catch (...)
+    {
+        std::cerr << "[BROADCAST][ERROR] Unknown exception broadcasting transaction" << std::endl;
+    }
 }
 // TODO: sendSyncRequest() function
 

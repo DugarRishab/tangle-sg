@@ -29,9 +29,17 @@ public:
     int updateTransaction(Transaction &tx, int no_lock = 0); // Updates the metadata of a transaction in the Tangle
     int updateTransactionMetrics(Transaction &tx); // Updates the metrics of a transaction in the Tangle
 
+    // Consensus threshold configuration
+    void setConsensusThreshold(int threshold) { consensusThreshold = threshold; }
+    int getConsensusThreshold() const { return consensusThreshold; }
+
+    // Propagation metrics calculation
+    void calculatePropagationMetrics(Transaction &tx);
+
 
 private:
     std::unordered_map<std::string, Transaction> transactions;
     std::shared_mutex tangleMutex; // Mutex to protect shared Tangle access
+    int consensusThreshold = 3; // Default: tx reaches consensus when cumulative_weight >= 3
 };
 #endif

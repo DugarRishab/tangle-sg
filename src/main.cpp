@@ -32,11 +32,29 @@ const std::string KEYFILE_PUB = "keys/node.pub";
 const std::string HMAC_SECRET_FILE = "secret/hmac_secret.txt";
 
 static std::atomic<bool> g_running{true};
+static std::atomic<bool> g_simulation_complete{false};
+static std::atomic<int64_t> g_last_activity{0};
+
+void updateLastActivity() {
+    g_last_activity.store(timeNow());
+}
 
 void signalHandler(int signo)
 {
     // safe: set atomic flag to false
     g_running.store(false);
+}
+
+// Global reference to tangle for signal handler access
+static Tangle* g_tangle_ptr = nullptr;
+static std::string g_snapshot_filename = "tangle_state.csv";
+
+void saveSnapshotOnShutdown()
+{
+    if (g_tangle_ptr != nullptr) {
+        std::cout << "[SHUTDOWN] Saving final snapshot...\n";
+        saveTangleToCSV(g_tangle_ptr->getAllTransactions(), g_snapshot_filename + ".final");
+    }
 }
 
 // Join a vector of strings by a delimiter
@@ -52,53 +70,86 @@ static std::string join(const std::vector<std::string> &v, char delim = ';')
     return oss.str();
 }
 
+bool saveTangleToCSVWithRetry(std::unordered_map<std::string, Transaction> transactions,
+                     const std::string &filename, int maxRetries = 3)
+{
+    for (int attempt = 0; attempt < maxRetries; ++attempt)
+    {
+        std::ofstream out(filename);
+        if (!out.is_open())
+        {
+            std::cerr << "[SAVE][ATTEMPT " << (attempt + 1) << "/" << maxRetries 
+                      << "] Failed to open CSV file for writing: " << filename << std::endl;
+            if (attempt < maxRetries - 1)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100 * (attempt + 1)));
+                continue;
+            }
+            return false;
+        }
+
+        // 1) Write header
+        out << "transaction_id,sender,receiver,amount,unit,"
+               "price_per_unit,currency,timestamp,parents,"
+               "cumulative_weight,lastUpdated,signature1,signature2,"
+               "consensusTimestamp,consensusDuration,propagationDelay,avgPropagationDelay\n";
+
+        // 2) Write each transaction
+        for (auto const item : transactions)
+        {
+            const Transaction &tx = item.second;
+
+            // Format parents as a semicolon-separated list
+            std::string parents = join(tx.data.parents, ';');
+
+            auto &d = tx.data;
+            auto &m = tx.metadata;
+
+            // CSV-safe quoting for any field that may contain commas
+            out << std::quoted(d.transaction_id) << ','
+                << std::quoted(d.sender) << ','
+                << std::quoted(d.receiver) << ','
+                << std::setprecision(17) // full precision
+                << d.amount << ','
+                << std::quoted(d.unit) << ','
+                << std::setprecision(17)
+                << d.price_per_unit << ','
+                << std::quoted(d.currency) << ','
+                << d.timestamp << ','
+                << std::quoted(parents) << ','
+                << m.cumulative_weight << ','
+                << m.lastUpdated << ','
+                << std::quoted(m.signature1) << ','
+                << std::quoted(m.signature2) << ','
+                << m.consensusTimestamp << ','
+                << m.consensusDuration << ','
+                << m.propagationDelay << ','
+                << m.avgPropagationDelay << '\n';
+        }
+
+        out.close();
+        if (!out.fail())
+        {
+            std::cout << "[SAVE] Tangle saved to CSV: " << filename << std::endl;
+            return true;
+        }
+        
+        std::cerr << "[SAVE][ATTEMPT " << (attempt + 1) << "/" << maxRetries 
+                  << "] Write failed, retrying..." << std::endl;
+        if (attempt < maxRetries - 1)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100 * (attempt + 1)));
+        }
+    }
+    
+    std::cerr << "[SAVE][ERROR] All " << maxRetries << " attempts failed to save CSV." << std::endl;
+    return false;
+}
+
 void saveTangleToCSV(std::unordered_map<std::string, Transaction> transactions,
                      const std::string &filename)
 {
-    std::ofstream out(filename);
-    if (!out.is_open())
-    {
-        std::cerr << "Failed to open CSV file for writing: "
-                  << filename << std::endl;
-        return;
-    }
-
-    // 1) Write header
-    out << "transaction_id,sender,receiver,amount,unit,"
-           "price_per_unit,currency,timestamp,parents,"
-           "cumulative_weight,lastUpdated,signature1,signature2\n";
-
-    // 2) Write each transaction
-    for (auto const item : transactions)
-    {
-        const Transaction &tx = item.second;
-
-        // Format parents as a semicolon-separated list
-        std::string parents = join(tx.data.parents, ';');
-
-        auto &d = tx.data;
-        auto &m = tx.metadata;
-
-        // CSV-safe quoting for any field that may contain commas
-        out << std::quoted(d.transaction_id) << ','
-            << std::quoted(d.sender) << ','
-            << std::quoted(d.receiver) << ','
-            << std::setprecision(17) // full precision
-            << d.amount << ','
-            << std::quoted(d.unit) << ','
-            << std::setprecision(17)
-            << d.price_per_unit << ','
-            << std::quoted(d.currency) << ','
-            << d.timestamp << ','
-            << std::quoted(parents) << ','
-            << m.cumulative_weight << ','
-            << m.lastUpdated << ','
-            << std::quoted(m.signature1) << ','
-            << std::quoted(m.signature2) << '\n';
-    }
-
-    out.close();
-    std::cout << "Tangle saved to CSV: " << filename << std::endl;
+    saveTangleToCSVWithRetry(transactions, filename, 3);
 }
 
 void compareTransactions(const Transaction &a, const Transaction &b)
@@ -223,10 +274,38 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
     char *txDelayEnv = getenv("TX_DELAY");
     int tx_delay = txDelayEnv ? atoi(txDelayEnv) : 30;
 
+    // Auto-save interval (default: 5 minutes = 300 seconds)
+    const char *autosaveEnv = getenv("AUTOSAVE_INTERVAL");
+    int autosaveInterval = autosaveEnv ? atoi(autosaveEnv) : 300;
+    int64_t lastAutosave = timeNow();
+
+    // Simulation timeout (default: 1 hour = 3600 seconds)
+    const char *timeoutEnv = getenv("SIMULATION_TIMEOUT");
+    int simulationTimeout = timeoutEnv ? atoi(timeoutEnv) : 3600;
+    int64_t simulationStart = timeNow();
+
     vector<int> timearray;
     int i = 0;
     while (i < tx_count)
     {
+        // Check simulation timeout
+        int64_t elapsed = (timeNow() - simulationStart) / 1000; // convert to seconds
+        if (elapsed > simulationTimeout) {
+            std::cout << "[SIMULATOR][TIMEOUT] Simulation timeout reached after " 
+                      << elapsed << " seconds. Stopping." << std::endl;
+            break;
+        }
+
+        // Periodic auto-save
+        if (autosaveInterval > 0) {
+            int64_t timeSinceLastSave = (timeNow() - lastAutosave) / 1000;
+            if (timeSinceLastSave >= autosaveInterval) {
+                std::cout << "[SIMULATOR][AUTOSAVE] Auto-saving tangle state..." << std::endl;
+                saveTangleToCSV(tangle.getAllTransactions(), "tangle_state_autosave.csv");
+                lastAutosave = timeNow();
+            }
+        }
+
         std::cout << "[SIMULATOR] Generating transaction " << i + 1 << "..." << std::endl;
         i++;
 
@@ -274,6 +353,9 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // Add the new transaction
         newTx = tangle.addNewTransaction(newTx);
         
+        // Update last activity timestamp
+        updateLastActivity();
+        
         // std::cout << "[SIMULATOR][POW] starting..." << std::endl;
         int64_t powStartTime = timeNow();
         performPoW(newTx.data.transaction_id);
@@ -285,9 +367,9 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
              << newTx.data.transaction_id << " at:" << newTx.data.timestamp << endl;
 
         auto end = timeNow();
-        auto elapsed = end - tsaStartTime;
+        auto elapsed_tx = end - tsaStartTime;
 
-        newTx.metadata.completionDuration = elapsed;
+        newTx.metadata.completionDuration = elapsed_tx;
         newTx.metadata.powDuration = powEndTime - powStartTime;
 
         tangle.updateTransactionMetrics(newTx); // Update the transaction in the Tangle
@@ -297,7 +379,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         cout << "[SIMULATOR] Transaction " << newTx.data.transaction_id << " added to Tangle." << endl;
         cout << "[SIMULATOR] TSA Duration: " << newTx.metadata.tsaDuration << " ms" << endl;
         cout << "[SIMULATOR] PoW Duration: " << newTx.metadata.powDuration << " ms" << endl;
-        cout << "[SIMULATOR] Total Time elapsed:" << elapsed << " ms" << endl;
+        cout << "[SIMULATOR] Total Time elapsed:" << elapsed_tx << " ms" << endl;
 
         // auto finalDataSerialized = serializeTransaction(newTx);
         // auto finalDataDeSerialized = deserializeTransaction(finalDataSerialized);
@@ -307,6 +389,10 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         // testSignaturePipeline(newTx);
 
         net.broadcastTransaction(newTx);
+        
+        // Update last activity after broadcast
+        updateLastActivity();
+        
         cout << "[SIMULATOR] Transaction broadcasted completed." << endl;
         this_thread::sleep_for(chrono::seconds(tx_delay));
     }
@@ -315,13 +401,30 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
     int waitPeriod = waitPeriodEnv ? atoi(waitPeriodEnv) : 300;
     std::this_thread::sleep_for(std::chrono::seconds(waitPeriod));
 
+    // Wait for queues to drain, but with idle timeout check
+    const char *idleTimeoutEnv = getenv("IDLE_TIMEOUT");
+    int idleTimeout = idleTimeoutEnv ? atoi(idleTimeoutEnv) : 600; // default 10 minutes
+    int64_t lastCheck = timeNow();
+    
     while(!peers.allQueuesEmpty()){
+        // Check if we've been idle too long
+        int64_t idleTime = (timeNow() - g_last_activity.load()) / 1000;
+        if (idleTime > idleTimeout) {
+            std::cout << "[SIMULATOR][IDLE_TIMEOUT] No activity for " << idleTime 
+                      << " seconds. Exiting queue wait." << std::endl;
+            break;
+        }
+        
         // additional sleep in case the queueis still not empty after wait time.
-        std::cout << "[SIMULATOR] QUEUES are not empty yet! Waiting for 1 more minute." << std::endl;
+        std::cout << "[SIMULATOR] QUEUES are not empty yet! Waiting for 1 more minute. (Idle: " 
+                  << idleTime << "s)" << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(60));
     }
 
     saveTangleToCSV(tangle.getAllTransactions(), "tangle_state.csv");
+    
+    // Mark simulation as complete
+    g_simulation_complete.store(true);
 
     // throw std::runtime_error("[SIMULATOR] Tangle state saved to tangle_state.txt. Exiting simulation.");
 }
@@ -466,6 +569,15 @@ int main()
     }
 
     Tangle tangle;
+    
+    // Set consensus threshold from environment variable (default: 3)
+    const char *consensusThresholdEnv = getenv("CONSENSUS_THRESHOLD");
+    int consensusThreshold = consensusThresholdEnv ? atoi(consensusThresholdEnv) : 3;
+    tangle.setConsensusThreshold(consensusThreshold);
+    std::cout << "[MAIN] Consensus threshold set to: " << consensusThreshold << std::endl;
+    
+    // Register tangle for graceful shutdown snapshot
+    g_tangle_ptr = &tangle;
 
     Peers peers;
 
@@ -551,7 +663,8 @@ int main()
 
     std::string nodeId = uid;
 
-    const std::string endpoint = "http://172.25.0.10:8000/api/telemetry";
+    const char *endpoint_env = getenv("TELEMETRY_ENDPOINT");
+    const std::string endpoint = endpoint_env ? endpoint_env : "http://172.25.0.10:8000/api/telemetry";
 
     const char *run_env = getenv("RUN_ID");
     int runId = run_env ? atoi(run_env) : 0;
@@ -569,13 +682,31 @@ int main()
     std::cout << "[MAIN] Simulation finished. Network and peer discovery remain active.\n";
     std::cout << "[MAIN] Press Ctrl+C to stop and shutdown cleanly.\n";
 
+    // Main loop with idle timeout check
+    const char *mainIdleTimeoutEnv = getenv("IDLE_TIMEOUT");
+    int mainIdleTimeout = mainIdleTimeoutEnv ? atoi(mainIdleTimeoutEnv) : 600;
+    int64_t simulationEndTime = timeNow();
+    
     while (g_running.load())
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        // Optional: periodic tasks, health checks etc.
+        
+        // Check idle timeout if simulation is complete
+        if (g_simulation_complete.load()) {
+            int64_t idleTime = (timeNow() - simulationEndTime) / 1000;
+            if (idleTime > mainIdleTimeout) {
+                std::cout << "[MAIN][IDLE_TIMEOUT] No activity for " << idleTime 
+                          << " seconds after simulation. Shutting down.\n";
+                g_running.store(false);
+                break;
+            }
+        }
     }
 
-    std::cout << "[MAIN] Shutdown requested — stopping modules...\n";
+    std::cout << "[MAIN] Shutdown requested — saving final snapshot and stopping modules...\n";
+    
+    // Save final snapshot on shutdown
+    saveSnapshotOnShutdown();
 
     curl_global_cleanup();
 

@@ -42,6 +42,9 @@ struct tx_metadata
     int64_t tsaDuration;
     int64_t completionDuration;
 
+    int64_t propagationDelay;      // total propagation time: last_hop - first_hop
+    int64_t avgPropagationDelay;   // average propagation per hop
+
     std::vector <std::pair<int64_t, std::string>> hops;
 };
 

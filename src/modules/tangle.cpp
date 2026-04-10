@@ -157,6 +157,21 @@ void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weigh
         std::cout << "[TANGLE] Cumulative weight updated for transaction: "
                   << ". New cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
 
+        // Check if consensus is reached for the first time
+        if (transactions[transaction_id].metadata.consensusTimestamp == 0 &&
+            transactions[transaction_id].metadata.cumulative_weight >= consensusThreshold)
+        {
+            int64_t now = timeNow();
+            transactions[transaction_id].metadata.consensusTimestamp = now;
+            transactions[transaction_id].metadata.consensusDuration = now - transactions[transaction_id].data.timestamp;
+            std::cout << "[TANGLE][CONSENSUS] Transaction " << transaction_id
+                      << " reached consensus! Duration: " << transactions[transaction_id].metadata.consensusDuration
+                      << " ms, Cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
+        }
+
+        // Calculate propagation metrics based on hops
+        calculatePropagationMetrics(transactions[transaction_id]);
+
         // Update cumulative weight for all parents
 
         updateCumulativeWeightOfParents(transactions[transaction_id].data.parents, weightIncrement);
@@ -490,5 +505,29 @@ int Tangle::updateTransactionMetrics(Transaction &tx)
     {
         cerr << "[TANGLE][ERROR] Transaction not found in Tangle for update: " << tx.data.transaction_id << endl;
         return -1;
+    }
+}
+
+void Tangle::calculatePropagationMetrics(Transaction &tx)
+{
+    // Calculate propagation delay and average propagation delay from hops
+    if (tx.metadata.hops.size() >= 2)
+    {
+        int64_t firstHopTime = tx.metadata.hops.front().first;
+        int64_t lastHopTime = tx.metadata.hops.back().first;
+        
+        tx.metadata.propagationDelay = lastHopTime - firstHopTime;
+        tx.metadata.avgPropagationDelay = tx.metadata.propagationDelay / (static_cast<int64_t>(tx.metadata.hops.size()) - 1);
+        
+        std::cout << "[TANGLE][PROPAGATION] Transaction " << tx.data.transaction_id
+                  << " propagation delay: " << tx.metadata.propagationDelay
+                  << " ms, avg per hop: " << tx.metadata.avgPropagationDelay << " ms (hops: " 
+                  << tx.metadata.hops.size() << ")" << std::endl;
+    }
+    else if (tx.metadata.hops.size() == 1)
+    {
+        // Only one hop, no propagation yet
+        tx.metadata.propagationDelay = 0;
+        tx.metadata.avgPropagationDelay = 0;
     }
 }

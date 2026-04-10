@@ -373,6 +373,9 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 		jmeta["tsaDuration"] = Json::Int64(tx.metadata.tsaDuration);
 		jmeta["completionDuration"] = Json::Int64(tx.metadata.completionDuration);
 
+		jmeta["propagationDelay"] = Json::Int64(tx.metadata.propagationDelay);
+		jmeta["avgPropagationDelay"] = Json::Int64(tx.metadata.avgPropagationDelay);
+
 		// hops
 		for (const auto &h : tx.metadata.hops)
 		{
@@ -443,12 +446,29 @@ bool sendTelemetry(const std::string &endpoint,
 {
 	std::string payload = buildTelemetryPayloadJson(nodeId, tangle, peers, metrics, runId);
 
-	HttpResult r = http_post_json(endpoint, payload);
-	if (!r.ok)
+	// Retry with exponential backoff (3 retries)
+	const int maxRetries = 3;
+	for (int attempt = 0; attempt < maxRetries; ++attempt)
 	{
-		std::cerr << "[telemetry] POST failed: code=" << r.http_code << " err=" << r.err << " body=" << r.body << "\n";
-		return false;
+		HttpResult r = http_post_json(endpoint, payload);
+		if (r.ok)
+		{
+			std::cout << "[telemetry] POST success: " << r.body << "\n";
+			return true;
+		}
+
+		std::cerr << "[telemetry] POST failed (attempt " << (attempt + 1) << "/" << maxRetries
+				  << "): code=" << r.http_code << " err=" << r.err << "\n";
+
+		if (attempt < maxRetries - 1)
+		{
+			// Exponential backoff: 2^attempt seconds
+			int delaySeconds = (1 << attempt); // 1, 2, 4 seconds
+			std::cout << "[telemetry] Retrying in " << delaySeconds << " seconds...\n";
+			std::this_thread::sleep_for(std::chrono::seconds(delaySeconds));
+		}
 	}
-	std::cout << "[telemetry] POST success: " << r.body << "\n";
-	return true;
+
+	std::cerr << "[telemetry] All " << maxRetries << " attempts failed. Giving up.\n";
+	return false;
 }

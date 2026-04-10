@@ -125,6 +125,9 @@ string serializeTransaction(const Transaction &tx, bool pretty){
 	jmeta["tsaDuration"] = Json::Int64(tx.metadata.tsaDuration);
 	jmeta["completionDuration"] = Json::Int64(tx.metadata.completionDuration);
 
+	jmeta["propagationDelay"] = Json::Int64(tx.metadata.propagationDelay);
+	jmeta["avgPropagationDelay"] = Json::Int64(tx.metadata.avgPropagationDelay);
+
 	// hops
 	for (const auto &h : tx.metadata.hops)
 	{
@@ -227,6 +230,11 @@ Transaction deserializeTransaction(const std::string &jsonStr){
 			tx.metadata.tsaDuration = jmeta["tsaDuration"].asInt64();
 		if (jmeta.isMember("completionDuration"))
 			tx.metadata.completionDuration = jmeta["completionDuration"].asInt64();
+
+		if (jmeta.isMember("propagationDelay"))
+			tx.metadata.propagationDelay = jmeta["propagationDelay"].asInt64();
+		if (jmeta.isMember("avgPropagationDelay"))
+			tx.metadata.avgPropagationDelay = jmeta["avgPropagationDelay"].asInt64();
 
 		if (jmeta.isMember("hops") && jmeta["hops"].isArray())
 		{
