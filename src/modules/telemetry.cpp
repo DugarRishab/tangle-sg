@@ -254,7 +254,7 @@ static size_t curl_write_cb(void *contents, size_t size, size_t nmemb, void *use
 	return size * nmemb;
 }
 
-inline HttpResult http_post_json(const std::string &url, const std::string &payload, const std::string &api_key = "")
+inline HttpResult http_post_json(const std::string &url, const std::string &payload, const std::string &api_key = "", long timeout_seconds = 600L)
 {
 	HttpResult res;
 	CURL *curl = curl_easy_init();
@@ -278,7 +278,7 @@ inline HttpResult http_post_json(const std::string &url, const std::string &payl
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)payload.size());
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res.body);
-	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 300L);
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout_seconds);
 
 	CURLcode rc = curl_easy_perform(curl);
 	if (rc != CURLE_OK)
@@ -446,29 +446,38 @@ bool sendTelemetry(const std::string &endpoint,
 {
 	std::string payload = buildTelemetryPayloadJson(nodeId, tangle, peers, metrics, runId);
 
-	// Retry with exponential backoff (3 retries)
-	const int maxRetries = 3;
+	// Retry for up to 30 minutes with exponential backoff capped at 5 minutes
+	const int maxRetries = 100; // Effectively infinite for 30 min window
+	const int maxDelaySeconds = 300; // Cap at 5 minutes
+	const long httpTimeout = 600L; // 10 minutes
+	auto startTime = std::chrono::steady_clock::now();
+	const auto maxTotalDuration = std::chrono::minutes(30);
+
 	for (int attempt = 0; attempt < maxRetries; ++attempt)
 	{
-		HttpResult r = http_post_json(endpoint, payload);
+		// Check if we've exceeded 30 minutes total
+		auto elapsed = std::chrono::steady_clock::now() - startTime;
+		if (elapsed > maxTotalDuration) {
+			std::cerr << "[telemetry] Giving up after 30 minutes of retries.\n";
+			return false;
+		}
+
+		HttpResult r = http_post_json(endpoint, payload, "", httpTimeout);
 		if (r.ok)
 		{
 			std::cout << "[telemetry] POST success: " << r.body << "\n";
 			return true;
 		}
 
-		std::cerr << "[telemetry] POST failed (attempt " << (attempt + 1) << "/" << maxRetries
+		std::cerr << "[telemetry] POST failed (attempt " << (attempt + 1) 
 				  << "): code=" << r.http_code << " err=" << r.err << "\n";
 
-		if (attempt < maxRetries - 1)
-		{
-			// Exponential backoff: 2^attempt seconds
-			int delaySeconds = (1 << attempt); // 1, 2, 4 seconds
-			std::cout << "[telemetry] Retrying in " << delaySeconds << " seconds...\n";
-			std::this_thread::sleep_for(std::chrono::seconds(delaySeconds));
-		}
+		// Exponential backoff with cap: min(2^attempt seconds, 5 minutes)
+		int delaySeconds = std::min((1 << attempt), maxDelaySeconds);
+		std::cout << "[telemetry] Retrying in " << delaySeconds << " seconds...\n";
+		std::this_thread::sleep_for(std::chrono::seconds(delaySeconds));
 	}
 
-	std::cerr << "[telemetry] All " << maxRetries << " attempts failed. Giving up.\n";
+	std::cerr << "[telemetry] All attempts failed. Giving up.\n";
 	return false;
 }

@@ -241,7 +241,7 @@ bool PeerDiscovery::verifyHMAC(const Json::Value &msg)
 	return computeHMAC(data.str()) == msg["hmac"].asString();
 }
 
-void PeerDiscovery::findPeers(int maxPeers, int maxTimeLimitMs)
+void PeerDiscovery::findPeers(int maxPeers, int /*maxTimeLimitMs*/)
 {
 	// Phase 1: Send PEER_REQUEST
 	std::cout << "[PD] Starting peer discovery with max " << maxPeers << " peers.\n";
@@ -329,10 +329,13 @@ void PeerDiscovery::responderLoop()
 					if (computeHMAC(d3.str()) == tag3)
 					{
 						
-						Peer p{A_UID, inet_ntoa(sender.sin_addr), (int)port_};
+						Peer p;
+						p.id = A_UID;
+						p.address = inet_ntoa(sender.sin_addr);
+						p.port = (int)port_;
+						p.nonce = N2;
 						p.nextRetry = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-						auto uri = "ws://" + p.address + ":" + std::to_string(ws_port) + "/";
-						p.uri = uri;
+						p.uri = "ws://" + p.address + ":" + std::to_string(ws_port) + "/";
 						net.connectWebSocket(p);
 
 						if (peers.addPeer(p) == 0)
