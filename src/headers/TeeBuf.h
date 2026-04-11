@@ -1,3 +1,6 @@
+#ifndef TEEBUF_H
+#define TEEBUF_H
+
 #include <iostream>
 #include <fstream>
 #include <streambuf>
@@ -141,3 +144,5 @@ private:
 		return std::string(buf);
 	}
 };
+
+#endif // TEEBUF_H

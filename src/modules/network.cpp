@@ -796,6 +796,27 @@ void Network::requestTransaction(const std::string &txId, Peer &peer)
     std::cout << "[ORPHAN] Requested missing transaction " << txId << " from peer " << peer.id << std::endl;
 }
 
+void Network::sendTangle(Peer& peer)
+{
+    // Serialize entire Tangle and send to peer
+    // Used for initial sync or peer catch-up
+    std::string tangleData = tangle.serialize();
+    std::string checksum = computeChecksum(tangleData);
+
+    // Create JSON payload
+    Json::Value jsonData;
+    jsonData["data"] = tangleData;
+    jsonData["checksum"] = checksum;
+    jsonData["timestamp"] = std::to_string(std::time(nullptr));
+
+    Json::StreamWriterBuilder writer;
+    std::string jsonString = Json::writeString(writer, jsonData);
+
+    // Send to the specific peer
+    sendMessage(jsonString, "SYNC_ACK", peer);
+    std::cout << "[SEND] Sent Tangle sync data to peer: " << peer.id << std::endl;
+}
+
 void Network::processOrphans(const std::string &parentId)
 {
     std::lock_guard<std::mutex> lock(orphansMutex);
