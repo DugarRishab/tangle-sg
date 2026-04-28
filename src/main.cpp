@@ -278,14 +278,26 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
     char *txDelayEnv = getenv("TX_DELAY");
     int tx_delay = txDelayEnv ? atoi(txDelayEnv) : 30;
 
+    // Read wait_period early for timeout calculation
+    const char* waitPeriodEnv = getenv("WAIT_PERIOD");
+    int waitPeriod = waitPeriodEnv ? atoi(waitPeriodEnv) : 300;
+
     // Auto-save interval (default: 5 minutes = 300 seconds)
     const char *autosaveEnv = getenv("AUTOSAVE_INTERVAL");
     int autosaveInterval = autosaveEnv ? atoi(autosaveEnv) : 300;
     int64_t lastAutosave = timeNow();
 
-    // Simulation timeout (default: 1 hour = 3600 seconds)
+    // Simulation timeout: dynamic based on tx_count * tx_delay + wait_period
+    // Allows override via SIMULATION_TIMEOUT env var for backward compatibility
     const char *timeoutEnv = getenv("SIMULATION_TIMEOUT");
-    int simulationTimeout = timeoutEnv ? atoi(timeoutEnv) : 3600;
+    int simulationTimeout;
+    if (timeoutEnv) {
+        simulationTimeout = atoi(timeoutEnv);  // Use explicit override
+    } else {
+        simulationTimeout = (tx_count * tx_delay) + waitPeriod;  // Dynamic calculation
+    }
+    std::cout << "[SIMULATOR] Timeout set to " << simulationTimeout << "s (tx_count=" 
+              << tx_count << " * tx_delay=" << tx_delay << " + wait_period=" << waitPeriod << ")" << std::endl;
     int64_t simulationStart = timeNow();
 
     vector<int> timearray;
@@ -401,8 +413,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         this_thread::sleep_for(chrono::seconds(tx_delay));
     }
 
-    const char* waitPeriodEnv = getenv("WAIT_PERIOD");
-    int waitPeriod = waitPeriodEnv ? atoi(waitPeriodEnv) : 300;
+    // waitPeriod already read above for timeout calculation
     std::this_thread::sleep_for(std::chrono::seconds(waitPeriod));
 
     // Wait for queues to drain, but with idle timeout check
