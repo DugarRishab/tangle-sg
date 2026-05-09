@@ -1,4 +1,5 @@
 # Tangle-SG: Directed Acyclic Graph (DAG) System Documentation
+> This is a permissioned, distributed, decentralized, ledgering system for low trust enviroment. Example use-case - microgrid energy transactions.
 
 ## Table of Contents
 
