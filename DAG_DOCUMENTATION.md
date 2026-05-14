@@ -25,8 +25,7 @@
 - **Decentralized**: No central authority; all nodes are peers
 - **Permissionless**: Any node can join and participate
 - **Dual-Signature**: Both sender and receiver must cryptographically approve transactions
-- **Proof-of-Work**: Minimal PoW at each phase to prevent spam
-- **Asynchronous Consensus**: Cumulative weight-based finality without explicit consensus rounds
+- **Asynchronous Consensus**: BFT vote-based finality without explicit consensus rounds
 
 ---
 
@@ -47,7 +46,7 @@
 │         └─────────────────┼──────────────────┘              │
 │                           │                                 │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ Transaction  │  │   PoW        │  │  Telemetry   │      │
+│  │ Transaction  │  │   Tangle     │  │  Telemetry   │      │
 │  │  (Signing)   │  │  (Consensus) │  │  (Metrics)   │      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 │                                                              │
@@ -64,7 +63,6 @@ src/
 │   ├── network.h          # WebSocket communication
 │   ├── peers2.h           # Peer management
 │   ├── peerDiscovery.h    # Auto-peering via UDP broadcast
-│   ├── pow.h              # Proof-of-Work
 │   ├── telemetry.h        # Metrics and monitoring
 │   ├── utils.h            # Utility functions
 │   └── ...
@@ -74,7 +72,6 @@ src/
 │   ├── network.cpp        # WebSocket server/client
 │   ├── peers2.cpp         # Peer state management
 │   ├── peerDiscovery.cpp  # UDP-based peer discovery
-│   ├── pow.cpp            # SHA256-based PoW
 │   ├── telemetry.cpp      # Metrics collection
 │   └── ...
 └── main.cpp               # Application entry point
@@ -112,7 +109,6 @@ struct tx_metadata {
     int64_t consensusDuration;                        // Time to consensus (ms)
     int64_t verificationTimestamp;                    // When verified
     int64_t verificationDuration;                     // Verification time (ms)
-    int64_t powDuration;                              // PoW computation time (ms)
     int64_t tsaDuration;                              // Tip Selection Algorithm time (ms)
     int64_t completionDuration;                       // Total completion time (ms)
     int64_t propagationDelay;                         // Total propagation time: last_hop - first_hop (ms)
@@ -259,22 +255,18 @@ Sender Node:
   2. Sign with sender's private key
      sig_sender = Sign_SK_S(H(body))
 
-  3. Perform minimal PoW (difficulty d1 = 2-4)
-     Find nonce1 such that H(prefix || body || nonce1) < target(d1)
-
-  4. Select parents
+  3. Select parents
      Parent A: Sender's last approved transaction
      Parent B: Global tip selected via weighted algorithm
 
-  5. Broadcast Tx1
-     Send: (body, sig_sender, nonce1, parentA, parentB)
+  4. Broadcast Tx1
+     Send: {tx JSON with sig1, parents}
 ```
 
 **Code Flow**:
 
 - `signTransaction()`: Uses libsodium's `crypto_sign_detached()` with sender's secret key
-- `performPoW()`: SHA256-based PoW with configurable difficulty (env var `POW`)
-- `addNewTransaction()`: Stores in Tangle with cumulative_weight = 0
+- `addNewTransaction()`: Stores in Tangle with status = PROPOSED, cumulative_weight = 0
 
 ### Phase 2: Network Gossip & Initial Verification
 
@@ -284,13 +276,10 @@ Sender Node:
 Any Node:
   1. Receive Tx1
 
-  2. Verify PoW
-     Check: H(prefix || body || nonce1) < target(d1)
-
-  3. Verify sender's signature
+  2. Verify sender's signature
      Check: verifyTransaction(H(body), sig_sender, sender_uid)
 
-  4. If valid: Store and gossip to peers
+  3. If valid: Store and gossip to peers
      If invalid: Drop
 ```
 
@@ -310,72 +299,83 @@ Receiver Node:
 
   2. Validate proposal content
      - Confirm units and tariff_rate
-     - Verify sig_sender and PoW
+     - Verify sig_sender
 
-  3. If acceptable: Proceed to approval
+  3. If acceptable: Proceed to in-place approval
 ```
 
-### Phase 4: Receiver Signs & Broadcasts Approval (Tx2)
+### Phase 4: Receiver Signs & Broadcasts Approval
 
-**File**: `@/src/modules/transaction.cpp:56-83`
+**File**: `@/src/modules/network.cpp:520-534`
 
 ```
 Receiver Node:
-  1. Generate challenge nonce
-     n2 = SecureRandom()
+  1. Detect transaction where receiver_id == self.uid
+     - Verify sig_sender is valid
+     - Validate transaction content (units, tariff_rate)
 
   2. Sign approval
-     sig_receiver = Sign_SK_R(H(body) || n2)
+     sig_receiver = Sign_SK_R(H(tx_data))
 
-  3. Perform PoW (difficulty d2)
-     Find nonce3 such that H(prefix || [Tx1_ID, n2, sig_receiver] || nonce3) < target(d2)
+  3. Add sig_receiver to tx.metadata.signature2
+     - Update tx.metadata.lastUpdated
+     - tx.metadata.verificationTimestamp = timeNow()
+     - tx.metadata.status transitions to APPROVED
 
-  4. Select parents for Tx2
-     Parent A: Tx1 (the original proposal)
-     Parent B: Global tip
-
-  5. Broadcast Tx2
-     Send: {ref: Tx1_ID, n2, sig_receiver, nonce3, parentA, parentB}
+  4. Broadcast lightweight TX_APPROVAL delta
+     Send: {full tx JSON with both sig1 and sig2}
 ```
+
+**Note**: The receiver does **not** create a separate "Tx2" transaction. The approval is an in-place metadata update (`signature2`, `status = APPROVED`) on the original transaction object. This preserves the DAG structure where each energy trade is represented by exactly one node. Receivers extend their reputation by selecting this transaction as a parent in their own future transactions, not by creating a separate approval node.
 
 ### Phase 5: Final Verification & Weight Update
 
-**File**: `@/src/modules/tangle.cpp:115-168`
+**File**: `@/src/modules/network.cpp:539-583`
 
 ```
 Any Node:
-  1. Validate Tx2
-     - Verify PoW
-     - Verify sig_sender from Tx1
-     - Recompute H(body), verify sig_receiver(H(body) || n2)
+  1. Validate updated transaction
+     - Verify sig_sender
+     - Verify sig_receiver
 
-  2. If valid: Mark Tx1 as approved
-     - Add node UID to Tx1.metadata.weightMap
-     - Increment Tx1.metadata.cumulative_weight
+  2. If valid: Update transaction in Tangle
+     - Store or update the transaction with both signatures
+     - Transaction is now bilaterally signed (status = APPROVED)
 
-  3. Update cumulative weight of parents
-     - Recursively propagate weight up the DAG
-     - Each parent's weight increases by 1
+  3. Update cumulative weight
+     - Increment tx.metadata.cumulative_weight for all ancestors (BFS)
+     - Uses children index for O(1) tip detection
 
-  4. Update tip selection
-     - Prefer tips with both Tx1 and Tx2 (fully approved)
-     - Deprioritize unapproved tips after timeout
+  4. Update tip selection eligibility
+     - Only APPROVED or FINAL transactions with reference_count == 0 are eligible as parents
+     - Unapproved proposals are not selected by TSA
 ```
 
 **Weight Propagation Algorithm**:
 
 ```cpp
-void updateCumulativeWeightOfParents(vector<std::string> &parents, int weightIncrement) {
-    for (const auto &parent : parents) {
-        if (transactions.find(parent) != transactions.end()) {
-            transactions[parent].metadata.cumulative_weight += weightIncrement;
-            transactions[parent].metadata.lastUpdated = timeNow();
-            // Recursive call: propagate to grandparents
-            updateCumulativeWeightOfParents(transactions[parent].data.parents, weightIncrement);
+void updateDescendantWeight(const std::string& tx_id, int increment = 1) {
+    std::queue<std::string> q;
+    for (const auto& parent : transactions[tx_id].data.parents) {
+        q.push(parent);
+    }
+    while (!q.empty()) {
+        std::string current = q.front(); q.pop();
+        auto it = transactions.find(current);
+        if (it != transactions.end()) {
+            it->second.metadata.cumulative_weight += increment;
+            it->second.metadata.lastUpdated = timeNow();
+            for (const auto& grandparent : it->second.data.parents) {
+                q.push(grandparent);
+            }
         }
     }
 }
 ```
+
+- **Iterative BFS**: Replaces recursive DFS to avoid stack overflow and lock contention
+- **Children Index**: `reference_count` tracks direct children for O(1) tip detection
+- **Descendant Count**: `cumulative_weight` counts all descendants (direct + indirect)
 
 ---
 
@@ -390,12 +390,13 @@ void updateCumulativeWeightOfParents(vector<std::string> &parents, int weightInc
 
 ### Tip Selection Algorithm
 
-**Current Implementation**: Weighted random selection
+**Current Implementation**: Uses children index + status filtering
 
 ```
-Tips = {transactions with no children}
-Preferred Tips = {tips with cumulative_weight > threshold AND both signatures present}
-Selected Tip = Random selection from Preferred Tips weighted by cumulative_weight
+Tips = {transactions with reference_count == 0 AND status >= APPROVED}
+Preferred Tips = {tips with cumulative_weight == 0}
+Other Tips     = {tips with cumulative_weight > 0}
+Selected Tip   = Random selection from Preferred Tips, fallback to Other Tips
 ```
 
 **Rationale**:
@@ -406,15 +407,17 @@ Selected Tip = Random selection from Preferred Tips weighted by cumulative_weigh
 
 ### Consensus Mechanism
 
-**Type**: Asynchronous, weight-based finality with configurable threshold
+**Type**: Asynchronous BFT vote-based finality
 
 ```
-Consensus Threshold = CONSENSUS_THRESHOLD (default: 3, configurable via env var)
-Confirmed = cumulative_weight >= consensusThreshold
+Consensus Threshold = ceil(2/3 * TOTAL_NODES) (derived from TOTAL_NODES env var)
+PROPOSED  -> sig1 only
+APPROVED  -> sig1 + sig2 (both parties verified)
+FINAL     -> votes >= consensusThreshold (BFT finality achieved)
 ```
 
 **Consensus Detection**:
-When a transaction's cumulative weight reaches the threshold:
+When a transaction's vote count reaches the BFT threshold:
 
 1. `consensusTimestamp` is set to current time
 2. `consensusDuration` is calculated as `consensusTimestamp - transaction_timestamp`
@@ -423,8 +426,8 @@ When a transaction's cumulative weight reaches the threshold:
 
 **Key Characteristics**:
 
-- **No explicit rounds**: Consensus emerges as weight accumulates
-- **Probabilistic finality**: Higher weight = higher confidence
+- **No explicit rounds**: Consensus emerges as votes accumulate
+- **Deterministic BFT finality**: Once votes >= threshold, transaction is FINAL
 - **Async-friendly**: Nodes don't need to wait for global consensus rounds
 - **Configurable**: Threshold can be adjusted based on network size and security requirements
 - **Metrics tracked**: Consensus time, propagation delay, and average per-hop delay are all recorded
@@ -441,9 +444,9 @@ When a transaction's cumulative weight reaches the threshold:
            Genesis  Genesis
 
 Legend:
-- Tx1, Tx2: Proposals (sig1 only)
-- Tx3, Tx4, Tx5: Approvals (sig1 + sig2)
-- Weight increases as more nodes approve
+- Tx1, Tx2: Fully approved transactions (sig1 + sig2), eligible as TSA parents
+- Tx3, Tx4, Tx5: New transactions that reference approved transactions as parents
+- Weight increases as more nodes process the transaction and as more children reference it
 ```
 
 ---
@@ -605,10 +608,10 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval) {
 **File**: `@/src/modules/network.cpp:30-34`
 
 ```cpp
-void Network::broadcastTransaction(const Transaction &Tx) {
-    // Send transaction to all connected peers
+void Network::broadcastTxProposal(const Transaction &Tx) {
+    // Send transaction proposal to all connected peers
     // Message format: JSON serialized transaction
-    // Message type: "TRANSACTION"
+    // Message type: "TX_PROPOSAL"
 }
 
 void Network::broadcastMessage(const std::string &message, const std::string &messageType) {
@@ -740,27 +743,22 @@ std::deque<Message> outgoingQueue;
 
 **Factors Affecting Throughput**:
 
-1. **PoW Difficulty**: Higher difficulty = slower transaction creation
-    - Difficulty 3: ~1-5 ms per transaction
-    - Difficulty 4: ~10-50 ms per transaction
-    - Difficulty 5: ~100-500 ms per transaction
-
-2. **Network Latency**: Gossip propagation time
+1. **Network Latency**: Gossip propagation time
     - Local network: ~10-50 ms
     - Internet: ~100-500 ms
 
-3. **Signature Verification**: Libsodium operations
+2. **Signature Verification**: Libsodium operations
     - Per transaction: ~1-2 ms
 
-4. **Weight Propagation**: Recursive parent updates
+3. **Weight Propagation**: Iterative BFS parent updates
     - DAG depth 10: ~1-5 ms
     - DAG depth 100: ~10-50 ms
 
 **Estimated Throughput** (single node):
 
-- **Best case**: 1000 tx/sec (no PoW, local network)
-- **Realistic case**: 10-100 tx/sec (PoW diff=3, network latency)
-- **Conservative case**: 1-10 tx/sec (PoW diff=4, internet latency)
+- **Best case**: 1000+ tx/sec (local network)
+- **Realistic case**: 100-500 tx/sec (internet latency)
+- **Conservative case**: 10-100 tx/sec (high latency, deep DAG)
 
 ### Memory Usage
 
@@ -782,15 +780,14 @@ std::deque<Message> outgoingQueue;
 **Transaction Lifecycle** (end-to-end):
 
 ```
-Sender PoW:           10-100 ms (depends on difficulty)
+Sender Signing:       1-2 ms (libsodium sign)
 Broadcast:            10-50 ms (network latency)
 Receiver Processing:  1-5 ms
-Receiver PoW:         10-100 ms
 Broadcast Approval:   10-50 ms
 Verification:         1-2 ms
 Weight Propagation:   1-50 ms (depends on DAG depth)
 ─────────────────────────────
-Total:                43-357 ms (typical: 100-150 ms)
+Total:                24-159 ms (typical: 50-100 ms)
 ```
 
 ---
@@ -803,8 +800,8 @@ Total:                43-357 ms (typical: 100-150 ms)
 
 **Implementation**:
 
-- Consensus threshold is configurable via `CONSENSUS_THRESHOLD` environment variable (default: 3)
-- When `cumulative_weight >= CONSENSUS_THRESHOLD`, transaction is marked as reaching consensus
+- Consensus threshold derived from `TOTAL_NODES` env var: `ceil(2/3 * TOTAL_NODES)` (default: 10 nodes -> threshold 7)
+- `TransactionStatus` enum: PROPOSED (sig1) -> APPROVED (sig1+sig2) -> FINAL (votes >= threshold)
 - `consensusTimestamp`, `consensusDuration`, `propagationDelay`, and `avgPropagationDelay` are calculated and stored
 - Log messages track consensus events for monitoring
 
@@ -894,22 +891,22 @@ Total:                43-357 ms (typical: 100-150 ms)
 
 **Issue**:
 
-- PoW difficulty is low (2-4)
-- Attacker can create many identities cheaply
-- No stake-based identity binding
+- No economic cost to create identities
+- Attacker can create many fake peers and transactions
+- BFT threshold assumes honest majority (<= 1/3 malicious)
 
 **Impact**:
 
 - Attacker can spam network with fake transactions
 - Attacker can create many fake peers
-- Weight-based consensus vulnerable to Sybil attacks
+- If >1/3 nodes are malicious, BFT guarantees break
 
 **Mitigation**:
 
-- Increase PoW difficulty
-- Implement reputation system
+- Implement reputation system based on cumulative weight
 - Add stake-based identity binding
 - Implement rate limiting per peer
+- Use permissioned network for production deployments
 
 ### 7. No Transaction Ordering Guarantee
 
@@ -957,7 +954,7 @@ Total:                43-357 ms (typical: 100-150 ms)
 
 - Transactions never expire
 - Old proposals can be approved indefinitely
-- Receiver can approve old proposals
+- Receiver can approve old proposals after long delay
 
 **Impact**:
 
@@ -1180,16 +1177,16 @@ if (sig1_valid && sig2_valid && pow_valid) {
 ### Updating Cumulative Weight
 
 ```cpp
-// When Tx2 (approval) is verified
-std::string tx1_id = tx2.data.parents[0];  // Reference to proposal
+// When fully-signed transaction is verified
+std::string tx_id = tx.data.transaction_id;
 
-// Update weight of Tx1
-tangle.updateCumulativeWeight(tx1_id, 1);
+// Update weight of this transaction
+tangle.updateCumulativeWeight(tx_id, 1);
 
 // This recursively updates all parents:
-// Tx1.weight++
-// Parent(Tx1).weight++
-// Parent(Parent(Tx1)).weight++
+// tx.weight++
+// Parent(tx).weight++
+// Parent(Parent(tx)).weight++
 // ... up to genesis
 ```
 

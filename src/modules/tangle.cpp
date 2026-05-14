@@ -8,6 +8,7 @@
 #include <string>
 #include <unordered_map>
 #include <shared_mutex>
+#include <queue>
 #include <openssl/sha.h>
 #include <algorithm>
 #include <cctype>
@@ -15,9 +16,7 @@
 #include "../headers/debug_lock.h"
 using namespace std;
 
-std::shared_mutex tangleMutex;
-
-Transaction Tangle::getTransaction(std::string &transaction_id)
+Transaction Tangle::getTransaction(const std::string &transaction_id)
 {
     // lock_guard<mutex> lock(tangleMutex);
     // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
@@ -60,6 +59,7 @@ Transaction Tangle::addNewTransaction(Transaction &tx)
 
     // cummulative weight is not updated here. it is done after double signing
     tx.metadata.cumulative_weight = 0; // Initialize cumulative weight
+    tx.metadata.status = TransactionStatus::PROPOSED;
 
     // sign the transaction
     tx.metadata.signature1 = signTransaction(txData);
@@ -75,6 +75,16 @@ Transaction Tangle::addNewTransaction(Transaction &tx)
     tx.metadata.hops.emplace_back(timeNow(), uid_str); // Add hop with current timestamp and UID
 
     transactions[tx.data.transaction_id] = tx;
+
+    // Populate children index for each parent
+    for (const auto& parent : tx.data.parents) {
+        children[parent].insert(tx.data.transaction_id);
+        auto pit = transactions.find(parent);
+        if (pit != transactions.end()) {
+            pit->second.metadata.reference_count = children[parent].size();
+        }
+        updateDescendantWeight(parent, 1);
+    }
 
     return tx;
 }
@@ -96,6 +106,16 @@ int Tangle::addTransaction(Transaction &tx, int update)
         tx.metadata.hops.emplace_back(timeNow(), uid_str); // Add hop with current timestamp and UID
         transactions[tx.data.transaction_id] = tx;
 
+        // Populate children index for each parent
+        for (const auto& parent : tx.data.parents) {
+            children[parent].insert(tx.data.transaction_id);
+            auto pit = transactions.find(parent);
+            if (pit != transactions.end()) {
+                pit->second.metadata.reference_count = children[parent].size();
+            }
+            updateDescendantWeight(parent, 1);
+        }
+
         std::cout << "[TANGLE] Transaction added to Tangle: " << tx.data.transaction_id << endl;
         return 2; // Transaction added
     }
@@ -111,77 +131,8 @@ int Tangle::addTransaction(Transaction &tx, int update)
         return 0; // Transaction already exists, no update
     }
 }
-// TODO: make it recursive for each parent until genesis
-void Tangle::updateCumulativeWeightOfParents(vector<std::string> &parents, int weightIncrement)
-{
-    for (const auto &parent : parents)
-    {
-        if (transactions.find(parent) != transactions.end())
-        {
-            transactions[parent].metadata.cumulative_weight += weightIncrement;
-            transactions[parent].metadata.lastUpdated = timeNow();
-
-            updateCumulativeWeightOfParents(transactions[parent].data.parents, weightIncrement);
-        }
-        else
-        {
-            std::cerr << "[TANGLE][ERROR] Parent transaction " << parent << " not found in Tangle." << std::endl;
-        }
-    }
-}
-
-void Tangle::updateCumulativeWeight(const std::string &transaction_id, int weightIncrement)
-{
-
-    // lock_guard<mutex> lock(tangleMutex);
-    // DebugScopedLock<std::mutex> lock(tangleMutex, "tangleMutex", 10);
-
-    std::unique_lock lock(tangleMutex);
-
-    if (transactions.find(transaction_id) == transactions.end())
-    {
-        std::cerr << "[ERROR] Transaction " << transaction_id << " not found in Tangle." << std::endl;
-        return;
-    }
-
-    const char *uidEnv = std::getenv("UID");
-    std::string uid = uidEnv ? uidEnv : "";
-
-    // Add the node to the weightMap if not already present
-    if (transactions[transaction_id].metadata.weightMap.find(uid) == transactions[transaction_id].metadata.weightMap.end())
-    {
-        transactions[transaction_id].metadata.weightMap.insert(uid);
-        transactions[transaction_id].metadata.cumulative_weight++;
-        transactions[transaction_id].metadata.lastUpdated = timeNow();
-
-        std::cout << "[TANGLE] Cumulative weight updated for transaction: "
-                  << ". New cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
-
-        // Check if consensus is reached for the first time
-        if (transactions[transaction_id].metadata.consensusTimestamp == 0 &&
-            transactions[transaction_id].metadata.cumulative_weight >= consensusThreshold)
-        {
-            int64_t now = timeNow();
-            transactions[transaction_id].metadata.consensusTimestamp = now;
-            transactions[transaction_id].metadata.consensusDuration = now - transactions[transaction_id].data.timestamp;
-            std::cout << "[TANGLE][CONSENSUS] Transaction " << transaction_id
-                      << " reached consensus! Duration: " << transactions[transaction_id].metadata.consensusDuration
-                      << " ms, Cumulative weight: " << transactions[transaction_id].metadata.cumulative_weight << std::endl;
-        }
-
-        // Calculate propagation metrics based on hops
-        calculatePropagationMetrics(transactions[transaction_id]);
-
-        // Update cumulative weight for all parents
-
-        updateCumulativeWeightOfParents(transactions[transaction_id].data.parents, weightIncrement);
-    }
-    else
-    {
-        std::cout << "[TANGLE] Node " << uid << " has already added weight to transaction " << transaction_id << ". No update performed." << std::endl;
-    }
-}
-
+// REMOVED: updateCumulativeWeightOfParents and updateCumulativeWeight
+// Use updateDescendantWeight (BFS) instead.
 
 // Serializes the Tangle's transactions into a string format
 // each part is separated by a comma
@@ -427,31 +378,9 @@ int Tangle::updateTransaction(Transaction &tx, int no_lock)
         if (existing.metadata.signature2.empty() && !tx.metadata.signature2.empty())
         {
             existing.metadata.signature2 = tx.metadata.signature2;
+            existing.metadata.status = TransactionStatus::APPROVED;
             // existing.metadata.lastUpdated = tx.metadata.lastUpdated;
             metadataChanged = true;
-        }
-
-        if (!existing.metadata.signature1.empty() && !existing.metadata.signature2.empty())
-        {
-            int weightIncrement = 0;
-            for (const auto &nodeId : tx.metadata.weightMap)
-            {
-                if (existing.metadata.weightMap.find(nodeId) == existing.metadata.weightMap.end())
-                {
-                    existing.metadata.weightMap.insert(nodeId);
-                    existing.metadata.cumulative_weight++;
-                    weightIncrement++;
-                }
-            }
-
-            if (weightIncrement > 0)
-            {
-
-                // existing.metadata.lastUpdated = tx.metadata.lastUpdated;
-                // update parents' cumulative weight
-                updateCumulativeWeightOfParents(existing.data.parents, weightIncrement);
-                metadataChanged = true;
-            }
         }
 
         if (existing.metadata.lastUpdated < tx.metadata.lastUpdated)
@@ -495,7 +424,6 @@ int Tangle::updateTransactionMetrics(Transaction &tx)
     {
         Transaction &existing = it->second;
 
-        existing.metadata.powDuration = tx.metadata.powDuration;
         existing.metadata.tsaDuration = tx.metadata.tsaDuration;
         existing.metadata.completionDuration = tx.metadata.completionDuration;
 
@@ -529,5 +457,101 @@ void Tangle::calculatePropagationMetrics(Transaction &tx)
         // Only one hop, no propagation yet
         tx.metadata.propagationDelay = 0;
         tx.metadata.avgPropagationDelay = 0;
+    }
+}
+
+void Tangle::addChild(const std::string& parent_id, const std::string& child_id) {
+    std::unique_lock lock(tangleMutex);
+    children[parent_id].insert(child_id);
+    auto it = transactions.find(parent_id);
+    if (it != transactions.end()) {
+        it->second.metadata.reference_count = static_cast<int>(children[parent_id].size());
+    }
+    updateDescendantWeight(parent_id, 1);
+}
+
+std::vector<std::string> Tangle::getChildren(const std::string& tx_id, TransactionStatus min_status) const {
+    std::shared_lock lock(tangleMutex);
+    std::vector<std::string> result;
+    auto it = children.find(tx_id);
+    if (it != children.end()) {
+        for (const auto& child_id : it->second) {
+            auto txIt = transactions.find(child_id);
+            if (txIt != transactions.end() &&
+                static_cast<int>(txIt->second.metadata.status) >= static_cast<int>(min_status)) {
+                result.push_back(child_id);
+            }
+        }
+    }
+    return result;
+}
+
+bool Tangle::isTip(const std::string& tx_id) const {
+    std::shared_lock lock(tangleMutex);
+    auto it = children.find(tx_id);
+    return (it == children.end()) || it->second.empty();
+}
+
+std::vector<std::string> Tangle::getTips(TransactionStatus min_status) const {
+    std::shared_lock lock(tangleMutex);
+    std::vector<std::string> tips;
+    for (const auto& [tx_id, tx] : transactions) {
+        if (tx_id == "genesis") continue;
+        auto cit = children.find(tx_id);
+        bool no_children = (cit == children.end() || cit->second.empty());
+        bool status_ok = (static_cast<int>(tx.metadata.status) >= static_cast<int>(min_status));
+        if (no_children && status_ok) {
+            tips.push_back(tx_id);
+        }
+    }
+    return tips;
+}
+
+bool Tangle::addVote(const std::string& tx_id, const std::string& voter_id) {
+    std::unique_lock lock(tangleMutex);
+    auto it = transactions.find(tx_id);
+    if (it == transactions.end()) return false;
+    if (it->second.metadata.voted_by.insert(voter_id).second) {
+        it->second.metadata.votes++;
+        it->second.metadata.lastUpdated = timeNow();
+        if (it->second.metadata.status != TransactionStatus::FINAL &&
+            it->second.metadata.votes >= consensusThreshold) {
+            finalizeTransaction(tx_id);
+        }
+        return true; // new vote recorded
+    }
+    return false; // duplicate vote
+}
+
+void Tangle::finalizeTransaction(const std::string& tx_id) {
+    auto it = transactions.find(tx_id);
+    if (it == transactions.end()) return;
+    it->second.metadata.status = TransactionStatus::FINAL;
+    int64_t now = timeNow();
+    it->second.metadata.consensusTimestamp = now;
+    it->second.metadata.consensusDuration = now - it->second.data.timestamp;
+    std::cout << "[TANGLE][CONSENSUS] Transaction " << tx_id
+              << " reached FINAL status. Votes: " << it->second.metadata.votes
+              << ", Duration: " << it->second.metadata.consensusDuration << " ms" << std::endl;
+}
+
+void Tangle::updateDescendantWeight(const std::string& tx_id, int increment) {
+    auto txIt = transactions.find(tx_id);
+    if (txIt == transactions.end()) return;
+
+    std::queue<std::string> q;
+    for (const auto& parent : txIt->second.data.parents) {
+        q.push(parent);
+    }
+    while (!q.empty()) {
+        std::string current = q.front(); q.pop();
+        auto it = transactions.find(current);
+        if (it != transactions.end()) {
+            it->second.metadata.cumulative_weight += increment;
+            it->second.metadata.lastUpdated = timeNow();
+            for (const auto& grandparent : it->second.data.parents) {
+                q.push(grandparent);
+            }
+        }
     }
 }

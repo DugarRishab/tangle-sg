@@ -1,0 +1,15 @@
+[0.010s] Loaded existing keypair.
+[0.013s] Node UID: oVJ9K9eRl6RHppHey8a3sbpUii1UqCo1GKUInzuoi8A=
+[0.013s] Exported PK_b64, SK_b64, and UID to environment.
+[0.014s] [MAIN] Consensus threshold set to: 7 (TOTAL_NODES=10)
+[0.016s] [INFO] Gossip fanout set to: 3 (N=10)
+[0.023s] [MONITOR] Checking active peers...
+[0.024s] [MONITOR] Active peers count: 0
+[0.025s] [INFO] Max peers set to: 5
+[0.028s] [TANGLE] Transaction added to Tangle: genesis
+[0.029s] [PD] Responder loop started, listening for incoming packets...
+[0.030s] [PD] Discovery loop started.
+[0.030s] [PD] Periodic discovery check. Current peers: 0. Starting discovery.
+[0.031s] [PD] Starting peer discovery with max 5 peers.
+[0.032s] [PD] Broadcast sent: {"from":"oVJ9K9eRl6RHppHey8a3sbpUii1UqCo1GKUInzuoi8A=","nonce_A":10933422519994713647,"type":"PEER_REQUEST"}
+[0.033s] 

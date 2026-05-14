@@ -111,6 +111,15 @@ string serializeTransaction(const Transaction &tx, bool pretty){
 		jmeta["weightMap"].append(id);
 
 	jmeta["cumulative_weight"] = tx.metadata.cumulative_weight;
+	jmeta["reference_count"] = tx.metadata.reference_count;
+	jmeta["status"] = static_cast<int>(tx.metadata.status);
+	jmeta["votes"] = tx.metadata.votes;
+
+	// voted_by: unordered_set -> array
+	std::vector<std::string> vb(tx.metadata.voted_by.begin(), tx.metadata.voted_by.end());
+	for (const auto &id : vb)
+		jmeta["voted_by"].append(id);
+
 	jmeta["signature1"] = tx.metadata.signature1;
 	jmeta["signature2"] = tx.metadata.signature2;
 	jmeta["checksum"] = tx.metadata.checksum;
@@ -121,7 +130,6 @@ string serializeTransaction(const Transaction &tx, bool pretty){
 	jmeta["verificationTimestamp"] = Json::Int64(tx.metadata.verificationTimestamp);
 	jmeta["verificationDuration"] = Json::Int64(tx.metadata.verificationDuration);
 
-	jmeta["powDuration"] = Json::Int64(tx.metadata.powDuration);
 	jmeta["tsaDuration"] = Json::Int64(tx.metadata.tsaDuration);
 	jmeta["completionDuration"] = Json::Int64(tx.metadata.completionDuration);
 
@@ -207,6 +215,18 @@ Transaction deserializeTransaction(const std::string &jsonStr){
 
 		if (jmeta.isMember("cumulative_weight"))
 			tx.metadata.cumulative_weight = jmeta["cumulative_weight"].asInt();
+		if (jmeta.isMember("reference_count"))
+			tx.metadata.reference_count = jmeta["reference_count"].asInt();
+		if (jmeta.isMember("status"))
+			tx.metadata.status = static_cast<TransactionStatus>(jmeta["status"].asInt());
+		if (jmeta.isMember("votes"))
+			tx.metadata.votes = jmeta["votes"].asInt();
+		if (jmeta.isMember("voted_by") && jmeta["voted_by"].isArray())
+		{
+			tx.metadata.voted_by.clear();
+			for (const auto &jv : jmeta["voted_by"])
+				tx.metadata.voted_by.insert(jv.asString());
+		}
 		if (jmeta.isMember("signature1"))
 			tx.metadata.signature1 = jmeta["signature1"].asString();
 		if (jmeta.isMember("signature2"))
@@ -224,8 +244,6 @@ Transaction deserializeTransaction(const std::string &jsonStr){
 		if (jmeta.isMember("verificationDuration"))
 			tx.metadata.verificationDuration = jmeta["verificationDuration"].asInt64();
 
-		if (jmeta.isMember("powDuration"))
-			tx.metadata.powDuration = jmeta["powDuration"].asInt64();
 		if (jmeta.isMember("tsaDuration"))
 			tx.metadata.tsaDuration = jmeta["tsaDuration"].asInt64();
 		if (jmeta.isMember("completionDuration"))

@@ -3,6 +3,7 @@
 #include <iostream>
 #include <random>
 #include <sstream>
+#include <iomanip>
 #include <cstring>
 #include <mutex>
 #include <sys/socket.h>
@@ -19,10 +20,12 @@
 #include "../headers/peers2.h"
 #include "../headers/network.h"
 #include "../headers/tangle.h"
+#include "../headers/utils.h"
 
 using namespace std;
 
-PeerDiscovery::PeerDiscovery(int port, Network &net, Peers &peers) : port_(port), running_(true), ws_port(9000), net(net), peers(peers)
+PeerDiscovery::PeerDiscovery(int port, Network &net, Peers &peers)
+	: peers(peers), maxPeers_(5), net(net), baseIP(), broadcastIP(), sock(-1), port_(port), secretK_(), ws_port(9000), running_(true), NONCE_A(0), UID_A(), responderThread_(), discoveryThread_()
 {
 	// Load HMAC secret
 	char *env = std::getenv("HMAC_SECRET");
@@ -170,6 +173,62 @@ uint64_t PeerDiscovery::generateNonce()
 	return eng();
 }
 
+uint64_t PeerDiscovery::generateFreshNonce()
+{
+	std::lock_guard<std::mutex> lock(nonceMutex_);
+	expirePendingNonces();
+	uint64_t nonce = generateNonce();
+	// Ensure uniqueness against consumed set
+	while (consumedNonces_.count(nonce) || pendingRequests_.count(nonce) || pendingResponses_.count(nonce))
+	{
+		nonce = generateNonce();
+	}
+	return nonce;
+}
+
+void PeerDiscovery::expirePendingNonces()
+{
+	int64_t now = timeNow();
+	// Expire old pending requests
+	for (auto it = pendingRequests_.begin(); it != pendingRequests_.end();)
+	{
+		if (now - it->second > nonceTTL_ms_)
+		{
+			it = pendingRequests_.erase(it);
+		}
+		else
+		{
+			++it;
+		}
+	}
+	// Expire old pending responses
+	for (auto it = pendingResponses_.begin(); it != pendingResponses_.end();)
+	{
+		if (now - it->second.timestamp > nonceTTL_ms_)
+		{
+			it = pendingResponses_.erase(it);
+		}
+		else
+		{
+			++it;
+		}
+	}
+}
+
+bool PeerDiscovery::isNonceConsumed(uint64_t nonce)
+{
+	std::lock_guard<std::mutex> lock(nonceMutex_);
+	return consumedNonces_.count(nonce) > 0;
+}
+
+void PeerDiscovery::markNonceConsumed(uint64_t nonce)
+{
+	std::lock_guard<std::mutex> lock(nonceMutex_);
+	consumedNonces_.insert(nonce);
+	pendingRequests_.erase(nonce);
+	pendingResponses_.erase(nonce);
+}
+
 std::string PeerDiscovery::computeHMAC(const std::string &data)
 {
 	unsigned int len;
@@ -178,7 +237,7 @@ std::string PeerDiscovery::computeHMAC(const std::string &data)
 		(unsigned char *)data.data(), data.size(), nullptr, &len);
 	std::ostringstream oss;
 	for (unsigned int i = 0; i < len; i++)
-		oss << std::hex << (int)result[i];
+		oss << std::hex << std::setw(2) << std::setfill('0') << (int)result[i];
 	return oss.str();
 }
 
@@ -224,32 +283,44 @@ bool PeerDiscovery::performHandshake(Peer p)
 	return true;
 }
 
-bool PeerDiscovery::verifyHMAC(const Json::Value &msg)
+bool PeerDiscovery::verifyHMAC(const Json::Value &msg, uint64_t expectedNonceA)
 {
 	if (!msg.isMember("from") || !msg.isMember("nonce_A") || !msg.isMember("nonce_B") || !msg.isMember("hmac"))
 		return false;
 
-	if (msg["nonce_A"].asUInt64() != NONCE_A)
+	if (msg["nonce_A"].asUInt64() != expectedNonceA)
 		return false;
 
 	std::string peerId = msg["from"].asString();
 	uint64_t nonceB = msg["nonce_B"].asUInt64();
 
 	std::ostringstream data;
-	data << UID_A << peerId << NONCE_A << nonceB;
+	data << UID_A << peerId << expectedNonceA << nonceB;
 
 	return computeHMAC(data.str()) == msg["hmac"].asString();
 }
 
 void PeerDiscovery::findPeers(int maxPeers, int /*maxTimeLimitMs*/)
 {
-	// Phase 1: Send PEER_REQUEST
+	if (peers.countPeers() >= maxPeers_)
+	{
+		std::cout << "[PD][WARN] Max peers reached (" << peers.countPeers()
+				  << "/" << maxPeers_ << "), skipping discovery broadcast.\n";
+		return;
+	}
+
 	std::cout << "[PD] Starting peer discovery with max " << maxPeers << " peers.\n";
+
+	uint64_t nonce = generateFreshNonce();
+	{
+		std::lock_guard<std::mutex> lock(nonceMutex_);
+		pendingRequests_[nonce] = timeNow();
+	}
 
 	Json::Value msg;
 	msg["type"] = "PEER_REQUEST";
 	msg["from"] = UID_A;
-	msg["nonce_A"] = (Json::UInt64)NONCE_A;
+	msg["nonce_A"] = (Json::UInt64)nonce;
 	std::string payload = Json::FastWriter().write(msg);
 
 	sendUDPBroadcast(payload);
@@ -285,16 +356,21 @@ void PeerDiscovery::responderLoop()
 
 				if (type == "PEER_REQUEST")
 				{
-					// if (peers.countPeers() >= maxPeers_)
-					// {
-					// 	std::cout << "[PD][WARN] Max peers reached, ignoring PEER_REQUEST.\n";
-					// 	continue; // Ignore if max peers reached
-					// }
-					// generate N2 and HMAC
+					if (peers.countPeers() >= maxPeers_)
+					{
+						std::cout << "[PD][WARN] Max peers reached, ignoring PEER_REQUEST.\n";
+						continue;
+					}
 					uint64_t N1 = msg["nonce_A"].asUInt64();
-					uint64_t N2 = NONCE_A;
+					uint64_t N2 = generateFreshNonce();
 					std::string A_UID = msg["from"].asString();
 					std::string B_UID = UID_A;
+
+					{
+						std::lock_guard<std::mutex> lock(nonceMutex_);
+						pendingResponses_[N2] = PendingResponse(N1, A_UID, timeNow());
+					}
+
 					std::ostringstream data;
 					data << A_UID << B_UID << N1 << N2;
 					std::string tag2 = computeHMAC(data.str());
@@ -313,22 +389,39 @@ void PeerDiscovery::responderLoop()
 				}
 				else if (type == "HS_ACK")
 				{
-					// if(peers.countPeers() >= maxPeers_)
-					// {
-					// 	std::cout << "[PD][WARN] Max peers reached, ignoring HS_ACK.\n";
-					// 	continue; // Ignore if max peers reached
-					// }
-					// Phase 3
+					if (peers.countPeers() >= maxPeers_)
+					{
+						std::cout << "[PD][WARN] Max peers reached, ignoring HS_ACK.\n";
+						continue;
+					}
 					uint64_t N2 = msg["nonce_B"].asUInt64();
 					std::string A_UID = msg["from"].asString();
 					std::string B_UID = UID_A;
+
+					// Replay protection: nonce_B must be in pendingResponses and not consumed
+					{
+						std::lock_guard<std::mutex> lock(nonceMutex_);
+						if (consumedNonces_.count(N2))
+						{
+							std::cerr << "[PD][ERROR] Replay detected: nonce_B already consumed.\n";
+							continue;
+						}
+						auto it = pendingResponses_.find(N2);
+						if (it == pendingResponses_.end())
+						{
+							std::cerr << "[PD][ERROR] Unexpected HS_ACK: nonce_B not pending.\n";
+							continue;
+						}
+						pendingResponses_.erase(it);
+						consumedNonces_.insert(N2);
+					}
+
 					std::string tag3 = msg["hmac"].asString();
 					// Verify
 					std::ostringstream d3;
 					d3 << A_UID << B_UID << N2;
 					if (computeHMAC(d3.str()) == tag3)
 					{
-						
 						Peer p;
 						p.id = A_UID;
 						p.address = inet_ntoa(sender.sin_addr);
@@ -336,13 +429,17 @@ void PeerDiscovery::responderLoop()
 						p.nonce = N2;
 						p.nextRetry = std::chrono::steady_clock::now() + std::chrono::seconds(2);
 						p.uri = "ws://" + p.address + ":" + std::to_string(ws_port) + "/";
-						net.connectWebSocket(p);
 
-						if (peers.addPeer(p) == 0)
+						// Deduplicate BEFORE opening WebSocket (point 4 fix)
+						Peer existing = peers.getPeer(p.uri);
+						if (!existing.id.empty())
 						{
-							std::cout << "[PD][WARN] Peer with ID " << p.uri << " already exists. Skipping.\n";
-							continue; // Peer already exists
+							std::cout << "[PD][WARN] Peer with URI " << p.uri << " already connected. Skipping.\n";
+							continue;
 						}
+
+						net.connectWebSocket(p);
+						peers.addPeer(p);
 						std::cout << "[PD] Handshake successful with peer: " << p.uri << "\n";
 					}
 				}
@@ -350,17 +447,37 @@ void PeerDiscovery::responderLoop()
 				{
 					std::cout << "[PD] HS_RESPONSE from " << msg["from"].asString() << "\n";
 
-					// if (peers.countPeers() >= maxPeers_)
-					// {
-					// 	std::cout << "[PD][WARN] Max peers reached, ignoring HS_RESPONSE.\n";
-					// 	continue; // Ignore if max peers reached
-					// }
+					if (peers.countPeers() >= maxPeers_)
+					{
+						std::cout << "[PD][WARN] Max peers reached, ignoring HS_RESPONSE.\n";
+						continue;
+					}
 
-					if (!verifyHMAC(msg))
+					uint64_t nonceA = msg["nonce_A"].asUInt64();
+
+					// Replay protection: nonce_A must be in pendingRequests and not consumed
+					{
+						std::lock_guard<std::mutex> lock(nonceMutex_);
+						if (consumedNonces_.count(nonceA))
+						{
+							std::cerr << "[PD][ERROR] Replay detected: nonce_A already consumed.\n";
+							continue;
+						}
+						if (!pendingRequests_.count(nonceA))
+						{
+							std::cerr << "[PD][ERROR] Unexpected HS_RESPONSE: nonce_A not pending.\n";
+							continue;
+						}
+					}
+
+					if (!verifyHMAC(msg, nonceA))
 					{
 						std::cerr << "[PD][ERROR] HMAC verification failed for HS_RESPONSE from " << msg["from"].asString() << "\n";
 						continue;
 					}
+
+					// Mark nonce consumed after successful HMAC verification
+					markNonceConsumed(nonceA);
 
 					Peer p;
 					p.id = msg["from"].asString();
@@ -371,19 +488,18 @@ void PeerDiscovery::responderLoop()
 
 					std::cout << "[PD] Discovered peer: " << p.id << " at " << p.address << ":" << p.port << "\n";
 
-					
+					// Deduplicate BEFORE opening WebSocket (point 4 fix)
+					Peer existing = peers.getPeer(p.uri);
+					if (!existing.id.empty())
+					{
+						std::cout << "[PD][WARN] Peer with URI " << p.uri << " already connected. Skipping.\n";
+						continue;
+					}
 
 					if (performHandshake(p))
 					{
-						// on success, add to active list
 						net.connectWebSocket(p);
-
-						if (peers.addPeer(p) == 0)
-						{
-							std::cout << "[PD][WARN] Peer with ID " << p.uri << " already exists. Skipping.\n";
-							continue; // Peer already exists
-						}
-
+						peers.addPeer(p);
 						std::cout << "[PD] Peer added: " << p.id << " at " << p.address << ":" << p.port << "\n";
 						std::cout << "[PD] Total connected Peers: " << peers.countPeers() << "\n";
 					}
@@ -408,10 +524,8 @@ void PeerDiscovery::discoveryLoop()
 	std::cout << "[PD] Discovery loop started.\n";
 	while (running_)
 	{
-        // Always try to discover more peers to ensure full network connectivity
-        // The MAX_PEERS limit only applies to gossip fan-out, not connections.
         std::cout << "[PD] Periodic discovery check. Current peers: " << peers.countPeers() << ". Starting discovery.\n";
-        findPeers(5, 5000); // Discover 5 peers at a time
+        findPeers(5, 5000); // Discover up to 5 peers at a time, bounded by MAX_PEERS
 		
 		// Sleep for a while before next check
 		// Use small sleep steps to allow quick shutdown

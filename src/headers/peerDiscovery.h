@@ -8,6 +8,7 @@
 #include <mutex>
 #include <chrono>
 #include <unordered_map>
+#include <unordered_set>
 #include <memory>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -73,6 +74,26 @@ class PeerDiscovery
 		// Handshake phases
 		bool performHandshake(Peer p);
 
-		bool verifyHMAC(const Json::Value &msg);
+		bool verifyHMAC(const Json::Value &msg, uint64_t expectedNonceA);
+
+		// Replay protection
+		struct PendingResponse {
+			uint64_t nonce_A;
+			std::string peerId;
+			int64_t timestamp;
+			PendingResponse(uint64_t n = 0, std::string p = "", int64_t t = 0)
+				: nonce_A(n), peerId(std::move(p)), timestamp(t) {}
+		};
+
+		std::unordered_map<uint64_t, int64_t> pendingRequests_; // nonce -> timestamp
+		std::unordered_map<uint64_t, PendingResponse> pendingResponses_;
+		std::unordered_set<uint64_t> consumedNonces_;
+		std::mutex nonceMutex_;
+		int64_t nonceTTL_ms_ = 30000; // 30s
+
+		uint64_t generateFreshNonce();
+		void expirePendingNonces();
+		bool isNonceConsumed(uint64_t nonce);
+		void markNonceConsumed(uint64_t nonce);
 };
 #endif // PEERDISCOVERY_H

@@ -31,20 +31,6 @@ Peers::~Peers()
 {
 }
 
-static void dump_backtrace_once()
-{
-	void *buf[32];
-	int n = backtrace(buf, sizeof(buf) / sizeof(buf[0]));
-	char **strs = backtrace_symbols(buf, n);
-	std::cerr << "=== backtrace (begin) ===\n";
-	for (int i = 0; i < n; ++i)
-	{
-		std::cerr << "[" << i << "] " << (strs ? strs[i] : "(null)") << "\n";
-	}
-	std::cerr << "=== backtrace (end) ===\n";
-	free(strs);
-}
-
 int Peers::addPeer(Peer &peer)
 {
 	// std::lock_guard<std::mutex> lock(peersMutex_);

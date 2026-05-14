@@ -1,24 +1,23 @@
 #!/bin/bash
+# Standalone server installer for Tangle-SG
+# Use on Raspberry Pi, Debian/Ubuntu servers, or any Linux host running tangle-sg directly.
 set -euo pipefail
 
-# Standalone installer for tangle-sg on Raspberry Pi (or any Debian-based ARM host)
-# - Installs system dependencies
-# - Builds the C++ project
-# - Configures environment variables
-# - (Optional) Installs and starts a systemd service
-# Idempotent: safe to re-run
-
-# -----------------------------
-# Configurable knobs via env
-# -----------------------------
-: "${INSTALL2_NO_SYSTEMD:=0}"         # set to 1 to skip systemd setup
-: "${INSTALL2_SET_TIMEZONE:=0}"       # set to 1 to set timezone to Asia/Kolkata
-: "${INSTALL2_TZ:=Asia/Kolkata}"
+# --------------------
+# Configurable defaults
+# --------------------
+: "${INSTALL_NO_SYSTEMD:=0}"         # set to 1 to skip systemd setup
+: "${INSTALL_SET_TIMEZONE:=0}"       # set to 1 to set timezone to Asia/Kolkata
+: "${INSTALL_TZ:=Asia/Kolkata}"
 : "${TX_COUNT:=10}"
 : "${TX_DELAY:=30}"
 : "${MAX_PEERS:=5}"
-: "${POW:=3}"
 : "${WAIT_PERIOD:=300}"
+: "${ORPHAN_TTL_SEC:=600}"
+: "${ORPHAN_POOL_MAX:=1000}"
+: "${RATE_LIMIT_BASE:=10.0}"
+: "${RATE_LIMIT_BURST:=20.0}"
+: "${RATE_LIMIT_WINDOW_SEC:=60}"
 : "${RUN_ID:=0}"
 : "${MONITOR_PERIOD:=5}"
 : "${TELEMETRY_ENDPOINT:=}"
@@ -42,15 +41,23 @@ arch_info() {
   echo "Detected architecture: $(uname -m)"
 }
 
-echo "[INFO] Starting install2.sh for tangle-sg"
+echo "[INFO] Starting install-server.sh for tangle-sg"
 arch_info
 
 # ---------------------------------
-# 0) Set Env Variables
+# 0) Derive BASE_IP if not provided
 # ---------------------------------
-export BASE_IP=$(ip route get 8.8.8.8 | awk '{print $7; exit}') # Get primary IP address
-
-
+if [ -z "${BASE_IP}" ]; then
+  BASE_IP=$(ip route get 8.8.8.8 2>/dev/null | awk '{print $7; exit}') || true
+fi
+if [ -z "${BASE_IP}" ]; then
+  if command -v hostname >/dev/null 2>&1; then
+    BASE_IP=$(hostname -I 2>/dev/null | awk '{print $1}') || true
+  fi
+fi
+if [ -z "${BASE_IP}" ]; then
+  echo "[WARN] Could not auto-detect BASE_IP. Please export BASE_IP=xxx.xxx.xxx.xxx and re-run if peer discovery should work."
+fi
 
 # ---------------------------------
 # 1) System packages and toolchain
@@ -60,9 +67,9 @@ ${SUDO} DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommend
   build-essential pkg-config cmake git curl ca-certificates tzdata \
   libssl-dev libwebsocketpp-dev libboost-all-dev libcurl4-openssl-dev libjsoncpp-dev libsodium-dev
 
-if [ "${INSTALL2_SET_TIMEZONE}" = "1" ]; then
-  echo "[INFO] Setting timezone to ${INSTALL2_TZ}"
-  echo "${INSTALL2_TZ}" | ${SUDO} tee /etc/timezone >/dev/null
+if [ "${INSTALL_SET_TIMEZONE}" = "1" ]; then
+  echo "[INFO] Setting timezone to ${INSTALL_TZ}"
+  echo "${INSTALL_TZ}" | ${SUDO} tee /etc/timezone >/dev/null
   ${SUDO} dpkg-reconfigure -f noninteractive tzdata || true
 fi
 
@@ -84,19 +91,6 @@ echo "[INFO] Build completed: ${PROJECT_DIR}/tangle_poc"
 # ---------------------------------------------
 # 3) Configure environment for standalone run
 # ---------------------------------------------
-# Derive BASE_IP if not provided: first non-loopback IPv4
-if [ -z "${BASE_IP}" ]; then
-  if command -v hostname >/dev/null 2>&1; then
-    BASE_IP=$(hostname -I 2>/dev/null | awk '{print $1}') || true
-  fi
-fi
-if [ -z "${BASE_IP}" ]; then
-  echo "[WARN] Could not auto-detect BASE_IP. Please export BASE_IP=xxx.xxx.xxx.xxx and re-run if peer discovery should work."
-fi
-
-
-
-# Write /etc/default/tangle-sg
 ${SUDO} mkdir -p "$(dirname "${ENV_FILE}")"
 {
   echo "# Environment for ${SERVICE_NAME}"
@@ -106,11 +100,14 @@ ${SUDO} mkdir -p "$(dirname "${ENV_FILE}")"
   echo "TX_COUNT=${TX_COUNT}"
   echo "TX_DELAY=${TX_DELAY}"
   echo "MAX_PEERS=${MAX_PEERS}"
-  echo "POW=${POW}"
   echo "WAIT_PERIOD=${WAIT_PERIOD}"
   echo "RUN_ID=${RUN_ID}"
   echo "MONITOR_PERIOD=${MONITOR_PERIOD}"
-  # Not currently consumed by the binary unless code is updated to read it
+  echo "ORPHAN_TTL_SEC=${ORPHAN_TTL_SEC}"
+  echo "ORPHAN_POOL_MAX=${ORPHAN_POOL_MAX}"
+  echo "RATE_LIMIT_BASE=${RATE_LIMIT_BASE}"
+  echo "RATE_LIMIT_BURST=${RATE_LIMIT_BURST}"
+  echo "RATE_LIMIT_WINDOW_SEC=${RATE_LIMIT_WINDOW_SEC}"
   echo "TELEMETRY_ENDPOINT=${TELEMETRY_ENDPOINT}"
 } | ${SUDO} tee "${ENV_FILE}" >/dev/null
 
@@ -119,11 +116,10 @@ echo "[INFO] Wrote environment to ${ENV_FILE}"
 # --------------------------------------
 # 4) Optional systemd service installation
 # --------------------------------------
-if [ "${INSTALL2_NO_SYSTEMD}" = "1" ]; then
-  echo "[INFO] Skipping systemd setup (INSTALL2_NO_SYSTEMD=1)."
+if [ "${INSTALL_NO_SYSTEMD}" = "1" ]; then
+  echo "[INFO] Skipping systemd setup (INSTALL_NO_SYSTEMD=1)."
 else
   RUN_USER=$(id -un)
-  # Prefer 'pi' when present; otherwise current user
   if id -u pi >/dev/null 2>&1; then RUN_USER=pi; fi
 
   ${SUDO} bash -c "cat > '${SERVICE_FILE}' <<'UNIT'
@@ -169,10 +165,10 @@ fi
 echo -e "\n[DONE] tangle-sg installed."
 echo "- Binary: ${PROJECT_DIR}/tangle_poc"
 echo "- Env: ${ENV_FILE}"
-if [ "${INSTALL2_NO_SYSTEMD}" != "1" ]; then
+if [ "${INSTALL_NO_SYSTEMD}" != "1" ]; then
   echo "- Service: ${SERVICE_NAME} (systemd)"
   echo "  Logs: journalctl -u ${SERVICE_NAME} -f"
 else
   echo "- To run manually:"
-  echo "  BASE_IP='${BASE_IP}' HMAC_SECRET='${HMAC_SECRET}' TX_COUNT='${TX_COUNT}' TX_DELAY='${TX_DELAY}' MAX_PEERS='${MAX_PEERS}' POW='${POW}' WAIT_PERIOD='${WAIT_PERIOD}' RUN_ID='${RUN_ID}' MONITOR_PERIOD='${MONITOR_PERIOD}' ${PROJECT_DIR}/tangle_poc"
+  echo "  BASE_IP='${BASE_IP}' HMAC_SECRET='${HMAC_SECRET}' TX_COUNT='${TX_COUNT}' TX_DELAY='${TX_DELAY}' MAX_PEERS='${MAX_PEERS}' WAIT_PERIOD='${WAIT_PERIOD}' RUN_ID='${RUN_ID}' MONITOR_PERIOD='${MONITOR_PERIOD}' ORPHAN_TTL_SEC='${ORPHAN_TTL_SEC}' ORPHAN_POOL_MAX='${ORPHAN_POOL_MAX}' RATE_LIMIT_BASE='${RATE_LIMIT_BASE}' RATE_LIMIT_BURST='${RATE_LIMIT_BURST}' RATE_LIMIT_WINDOW_SEC='${RATE_LIMIT_WINDOW_SEC}' ${PROJECT_DIR}/tangle_poc"
 fi

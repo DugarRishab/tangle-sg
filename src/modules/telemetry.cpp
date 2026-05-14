@@ -369,7 +369,15 @@ inline std::string buildTelemetryPayloadJson(const std::string &nodeId,
 		jmeta["verificationTimestamp"] = Json::Int64(tx.metadata.verificationTimestamp);
 		jmeta["verificationDuration"] = Json::Int64(tx.metadata.verificationDuration);
 
-		jmeta["powDuration"] = Json::Int64(tx.metadata.powDuration);
+		jmeta["reference_count"] = tx.metadata.reference_count;
+		jmeta["status"] = static_cast<int>(tx.metadata.status);
+		jmeta["votes"] = tx.metadata.votes;
+
+		// voted_by: unordered_set -> array
+		std::vector<std::string> vb(tx.metadata.voted_by.begin(), tx.metadata.voted_by.end());
+		for (const auto &id : vb)
+			jmeta["voted_by"].append(id);
+
 		jmeta["tsaDuration"] = Json::Int64(tx.metadata.tsaDuration);
 		jmeta["completionDuration"] = Json::Int64(tx.metadata.completionDuration);
 

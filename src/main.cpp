@@ -5,8 +5,8 @@
 #include <thread>
 #include <chrono>
 #include <filesystem>
+#include <cmath>
 #include <sodium.h>
-#include "headers/pow.h"
 #include "headers/tsa.h"
 #include "headers/transaction.h"
 #include "headers/tangle.h"
@@ -41,6 +41,7 @@ void updateLastActivity() {
 
 void signalHandler(int signo)
 {
+    (void)signo; // silence unused-parameter warning
     // safe: set atomic flag to false
     g_running.store(false);
 }
@@ -99,7 +100,7 @@ bool saveTangleToCSVWithRetry(std::unordered_map<std::string, Transaction> trans
                "consensusTimestamp,consensusDuration,propagationDelay,avgPropagationDelay\n";
 
         // 2) Write each transaction
-        for (auto const item : transactions)
+        for (auto const &item : transactions)
         {
             const Transaction &tx = item.second;
 
@@ -362,22 +363,12 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         newTx.metadata.lastUpdated = timeNow();
         newTx.metadata.cumulative_weight = 0; // Initialize cumulative weight
         newTx.metadata.tsaDuration = tsaEndTime - tsaStartTime;
-        newTx.metadata.powDuration = 0; // Placeholder, will be set after PoW
         
-        // Compute PoW for new transaction
-
         // Add the new transaction
         newTx = tangle.addNewTransaction(newTx);
         
         // Update last activity timestamp
         updateLastActivity();
-        
-        // std::cout << "[SIMULATOR][POW] starting..." << std::endl;
-        int64_t powStartTime = timeNow();
-        performPoW(newTx.data.transaction_id);
-        int64_t powEndTime = timeNow();
-        
-        // std::ut << "[SIMULATOR][POW] over" << std::endl;
 
         cout << "[SIMULATOR] Generated new transaction: "
              << newTx.data.transaction_id << " at:" << newTx.data.timestamp << endl;
@@ -386,7 +377,6 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
         auto elapsed_tx = end - tsaStartTime;
 
         newTx.metadata.completionDuration = elapsed_tx;
-        newTx.metadata.powDuration = powEndTime - powStartTime;
 
         tangle.updateTransactionMetrics(newTx); // Update the transaction in the Tangle
 
@@ -394,7 +384,6 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 
         cout << "[SIMULATOR] Transaction " << newTx.data.transaction_id << " added to Tangle." << endl;
         cout << "[SIMULATOR] TSA Duration: " << newTx.metadata.tsaDuration << " ms" << endl;
-        cout << "[SIMULATOR] PoW Duration: " << newTx.metadata.powDuration << " ms" << endl;
         cout << "[SIMULATOR] Total Time elapsed:" << elapsed_tx << " ms" << endl;
 
         // auto finalDataSerialized = serializeTransaction(newTx);
@@ -404,7 +393,7 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
 
         // testSignaturePipeline(newTx);
 
-        net.broadcastTransaction(newTx);
+        net.broadcastTxProposal(newTx);
         
         // Update last activity after broadcast
         updateLastActivity();
@@ -419,8 +408,6 @@ void simulateSmartMeter(Tangle &tangle, Peers &peers, Network &net)
     // Wait for queues to drain, but with idle timeout check
     const char *idleTimeoutEnv = getenv("IDLE_TIMEOUT");
     int idleTimeout = idleTimeoutEnv ? atoi(idleTimeoutEnv) : 600; // default 10 minutes
-    int64_t lastCheck = timeNow();
-    
     while(!peers.allQueuesEmpty()){
         // Check if we've been idle too long
         int64_t idleTime = (timeNow() - g_last_activity.load()) / 1000;
@@ -585,11 +572,16 @@ int main()
 
     Tangle tangle;
     
-    // Set consensus threshold from environment variable (default: 3)
-    const char *consensusThresholdEnv = getenv("CONSENSUS_THRESHOLD");
-    int consensusThreshold = consensusThresholdEnv ? atoi(consensusThresholdEnv) : 3;
+    // Set consensus threshold from TOTAL_NODES (default: 10 -> threshold 7)
+    const char* totalNodesEnv = getenv("TOTAL_NODES");
+    int totalNodes = totalNodesEnv ? atoi(totalNodesEnv) : 10;
+    if (!totalNodesEnv) {
+        std::cerr << "[WARN] TOTAL_NODES not set, defaulting to 10. Set this for correct BFT threshold." << std::endl;
+    }
+    int consensusThreshold = static_cast<int>(std::ceil(2.0 / 3.0 * totalNodes));
     tangle.setConsensusThreshold(consensusThreshold);
-    std::cout << "[MAIN] Consensus threshold set to: " << consensusThreshold << std::endl;
+    std::cout << "[MAIN] Consensus threshold set to: " << consensusThreshold
+              << " (TOTAL_NODES=" << totalNodes << ")" << std::endl;
     
     // Register tangle for graceful shutdown snapshot
     g_tangle_ptr = &tangle;
@@ -604,7 +596,7 @@ int main()
 
     startTelemetryCollector(1000);
 
-    // Create genesis transaction (without PoW initially)
+    // Create genesis transaction
 
     tx_data genesisData = {
         "genesis",                       // transaction_id
@@ -620,11 +612,24 @@ int main()
     };
     tx_metadata genesisMetadata = {
         time(nullptr),   // lastUpdated
-        {},              // weightMap   
+        {},              // weightMap
         0,               // cumulative_weight
+        0,               // reference_count
+        TransactionStatus::FINAL,  // status: genesis is permanently FINAL
+        0,               // votes
+        {},              // voted_by
         "genesis_sign1", // signature1
         "genesis_sign2", // signature2
-        ""               // checksum
+        "",              // checksum
+        0,               // consensusTimestamp
+        0,               // consensusDuration
+        0,               // verificationTimestamp
+        0,               // verificationDuration
+        0,               // tsaDuration
+        0,               // completionDuration
+        0,               // propagationDelay
+        0,               // avgPropagationDelay
+        {}               // hops
     };
     Transaction genesis = {genesisData, genesisMetadata};
     {

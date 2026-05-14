@@ -21,13 +21,24 @@ struct tx_data
 };
 
 
+enum class TransactionStatus {
+    PROPOSED = 0,   // sig1 only; not eligible for TSA parent selection
+    APPROVED = 1,   // sig1 + sig2; eligible for TSA, accumulating votes
+    FINAL = 2       // votes >= threshold; BFT finality reached
+};
+
 struct tx_metadata
 {
     int64_t lastUpdated;
 
-    std::unordered_set<std::string> weightMap; // array of all nodes that have added weight directly to this tx
+    std::unordered_set<std::string> weightMap; // DEPRECATED: kept for transition compat, remove in future phase
 
-    int cumulative_weight; // length of weightMap + weight increment from children
+    int cumulative_weight;                     // NOW: descendant count (direct + indirect)
+    int reference_count = 0;                   // NEW: direct children count
+    TransactionStatus status = TransactionStatus::PROPOSED;  // NEW
+    int votes = 0;                             // NEW
+    std::unordered_set<std::string> voted_by;  // NEW
+
     std::string signature1; // sender’s sig
     std::string signature2; // receiver’s sig
     std::string checksum; // hash of Tx->ata for integrity
@@ -38,7 +49,6 @@ struct tx_metadata
     int64_t verificationTimestamp; // timestamp when transaction is verified
     int64_t verificationDuration; // time taken to verify the transaction
     
-    int64_t powDuration; // time taken to perform PoW
     int64_t tsaDuration;
     int64_t completionDuration;
 

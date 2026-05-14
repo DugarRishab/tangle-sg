@@ -15,8 +15,10 @@
 #include <unordered_map>
 #include <arpa/inet.h>
 #include <ctime>
+#include <cstdlib>
+#include <algorithm>
+#include <cmath>
 #include "../headers/peers2.h"
-#include "../headers/pow.h"
 #include "../headers/transaction.h"
 #include "../headers/utils.h"
 #include <json/json.h>
@@ -34,6 +36,27 @@ using WsServer = websocketpp::server<websocketpp::config::asio>;
 
 Network::Network(uint16_t ws_port, Tangle &tangle, Peers &peers) : ws_port(ws_port), tangle(tangle), peers(peers)
 {
+    // Phase 7: Orphan pool config
+    const char *orphanTTLEnv = getenv("ORPHAN_TTL_SEC");
+    orphanTTL = orphanTTLEnv ? atoi(orphanTTLEnv) : 600;
+    const char *orphanPoolMaxEnv = getenv("ORPHAN_POOL_MAX");
+    orphanPoolMax = orphanPoolMaxEnv ? atoi(orphanPoolMaxEnv) : 1000;
+
+    // Phase 8: Rate limit config
+    const char *rateLimitBaseEnv = getenv("RATE_LIMIT_BASE");
+    rateLimitBase = rateLimitBaseEnv ? atof(rateLimitBaseEnv) : 10.0;
+    const char *rateLimitBurstEnv = getenv("RATE_LIMIT_BURST");
+    rateLimitBurst = rateLimitBurstEnv ? atof(rateLimitBurstEnv) : 20.0;
+    const char *rateLimitWindowEnv = getenv("RATE_LIMIT_WINDOW_SEC");
+    int rateLimitWindowSec = rateLimitWindowEnv ? atoi(rateLimitWindowEnv) : 60;
+    rateLimitWindowMs = rateLimitWindowSec * 1000;
+
+    // Phase: Dynamic gossip fanout = ceil(ln(N)), min 3
+    const char *totalNodesEnv = getenv("TOTAL_NODES");
+    int totalNodes = totalNodesEnv ? atoi(totalNodesEnv) : 10;
+    gossipFanout_ = std::max(3, static_cast<int>(std::ceil(std::log(totalNodes))));
+    std::cout << "[INFO] Gossip fanout set to: " << gossipFanout_ << " (N=" << totalNodes << ")\n";
+
     initServer();
     initClient();
     const char *monitorDelayEnv = getenv("MONITOR_PERIOD");
@@ -106,10 +129,11 @@ void Network::startPeerMonitor(std::chrono::milliseconds interval)
                         continue;
                     }
 
-                    // If retryCount reached limit, skip
-                    if (peer.retryCount >= 3)
+                    // If retryCount reached limit, evict dead peer
+                    if (peer.retryCount >= 5)
                     {
-                        std::cout << "[MONITOR] Skipping " << peer.id << " - max retries reached.\n";
+                        std::cout << "[MONITOR] Evicting peer " << peer.id << " - max retries reached.\n";
+                        peers.removePeer(uri);
                         continue;
                     }
 
@@ -303,7 +327,7 @@ void Network::initServer()
 
 void Network::scheduleReconnect(Peer &peer)
 {
-    if (peer.retryCount < 3) // Limit retries to avoid infinite loop
+    if (peer.retryCount < 5) // Limit retries to avoid infinite loop
     {
         peer.retryCount++;
         peer.nextRetry = std::chrono::steady_clock::now() + std::chrono::seconds(2 * peer.retryCount);
@@ -418,15 +442,17 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                 string timestamp = jsonData["timestamp"].asString();
 
                 // Verify checksum
-                if (verifyChecksum(data, checksum))
-                {
-                    cout << "[HANDLER] Received valid message from peer." << endl;
-                    // handleTCPClient(data + " " + checksum, tangle);
-                }
-                else
+                if (!verifyChecksum(data, checksum))
                 {
                     cerr << "[HANDLER][ERROR] Checksum verification failed for received message data." << endl;
+                    recordValidation(peer.uri, false);
                     return;
+                }
+
+                // Phase 8: Rate limit ALL messages
+                if (!consumeToken(peer.uri))
+                {
+                    return; // silently drop, peer exceeded quota
                 }
             }
             else
@@ -435,179 +461,44 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                 return;
             }
 
-            if (messageType == "NEWTX")
+            if (messageType == "TX_PROPOSAL")
             {
-                try
-                {
-                    string data = jsonData["data"].asString();
-                    string checksum = jsonData["checksum"].asString();
-                    string timestamp = jsonData["timestamp"].asString();
-
-                    cout << "[HANDLER] Received new transaction from peer: " << message << endl;
-                    // Handle new transaction
-                    Transaction newTx = deserializeTransaction(data);
-
-                    // Check for missing parents
-                    bool missingParent = false;
-                    for (const auto &parent : newTx.data.parents)
-                    {
-                        std::string parentId = parent;
-                        Transaction pTx = tangle.getTransaction(parentId);
-                        if (!tangle.transactionPresent(pTx) && parent != "genesis")
-                        {
-                            if (pTx.data.transaction_id.empty()) {
-                                std::cout << "[ORPHAN] Transaction " << newTx.data.transaction_id << " missing parent " << parent << ". Queuing as orphan." << std::endl;
-
-                                std::lock_guard<std::mutex> lock(orphansMutex);
-                                orphans[parent].push_back(newTx);
-                                missingParent = true;
-
-                                // Request the missing parent
-                                requestTransaction(parent, peer);
-                            }
-                        }
-                    }
-
-                    if (missingParent) return;
-
-                    // TODO: check sign status of tx
-                    if (newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
-                    {
-                        cerr << "[HANDLER][ERROR] Transaction is not signed. Cannot add to Tangle." << endl;
-                        return;
-                    }
-                    // single signed transaction
-                    else if (!newTx.metadata.signature1.empty() && newTx.metadata.signature2.empty())
-                    {
-                        cout << "[HANDLER] Transaction is only single signed." << endl;
-
-                        // TODO: if the transaction is only signed by sender,
-                        // add transaction to Tangle but perform PoW later
-                        string txSearialized = serializeTransactionData(newTx);
-                        string sig_b64 = newTx.metadata.signature1;
-
-                        if (verifyTransaction(txSearialized, sig_b64, newTx.data.sender)) // Verify signature 1 is sender's signature
-                        {
-                            cout << "[HANDLER] Transaction is signed by sender." << endl;
-                            // If the transaction is only signed by sender, we can add it to the Tangle
-                            // but we need to perform PoW later
-                        }
-                        else
-                        {
-                            cerr << "[HANDLER][ERROR] Transaction signature 1 verification failed for sender." << endl;
-                            return;
-                        }
-                        int isTxPresent = tangle.addTransaction(newTx, 1);
-                        Transaction tx = tangle.getTransaction(newTx.data.transaction_id);
-                        // check if the receiver is same as the host node.
-                        if (isTxPresent == 0)
-                        {
-                            cout << "[HANDLER] Transaction already exists in Tangle. No Updates. Not broadcasting." << endl;
-                            return;
-                        }
-                        if (isTxPresent == 1)
-                        {
-                            cout << "[HANDLER] Transaction already exists in Tangle. Updating it." << endl;
-
-                            broadcastTransaction(tangle.getTransaction(tx.data.transaction_id));
-                        }
-                        if (isTxPresent == 2)
-                        {
-                            cout << "[HANDLER] Transaction added to Tangle. Broadcasting." << endl;
-
-                            const std::string uid = getenv("UID");
-                            // If yes, that means this node (the host node) is the receiver and must doubly sign the transaction
-                            if (tx.data.receiver == uid) // If receiver is the host node
-                            {
-                                cout << "[HANDLER] Transaction is for this node. Double signing it." << endl;
-                                // Sign the transaction with the receiver's signature
-                                tx.metadata.signature2 = signTransaction(txSearialized);
-                                // perform PoW on the transaction
-                                performPoW(tx.data.transaction_id);
-                                tx.metadata.lastUpdated = timeNow();
-                                tx.metadata.verificationTimestamp = timeNow();
-                                tx.metadata.verificationDuration = timeNow() - tx.data.timestamp;
-
-                                tangle.updateTransaction(tx);
-                                tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
-                                                                                       // Update the transaction in Tangle
-                            }
-                            broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
-                        }
-                    }
-                    // double signed transaction
-                    else if (!newTx.metadata.signature1.empty() && !newTx.metadata.signature2.empty())
-                    {
-                        // TODO: verify each signature
-                        string txSearialized = serializeTransactionData(newTx);
-                        string sig1_b64 = newTx.metadata.signature1;
-                        string sig2_b64 = newTx.metadata.signature2;
-
-                        if (verifyTransaction(txSearialized, sig1_b64, newTx.data.sender) &&
-                            verifyTransaction(txSearialized, sig2_b64, newTx.data.receiver)) // Verify both signatures
-                        {
-                            cout << "[HANDLER] Transaction is double signed by sender and receiver. Adding to Tangle." << endl;
-                        }
-                        else
-                        {
-                            cerr << "[HANDLER][ERROR] Transaction signature verification failed." << endl;
-                            return;
-                        }
-
-                        int isTxPresent = tangle.addTransaction(newTx, 1);
-                        Transaction tx = tangle.getTransaction(newTx.data.transaction_id);
-                        // check if the receiver is same as the host node.
-                        if (isTxPresent == 0)
-                        {
-                            cout << "[HANDLER] Transaction already exists in Tangle. No Updates. Not broadcasting." << endl;
-                            return;
-                        }
-                        if (isTxPresent == 1)
-                        {
-                            cout << "[HANDLER] Transaction already exists in Tangle. Updating it." << endl;
-                            broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
-                        }
-                        if (isTxPresent == 2)
-                        {
-                            cout << "[HANDLER] Transaction added to Tangle. Broadcasting." << endl;
-                            // perform PoW on the transaction
-                            performPoW(tx.data.transaction_id);
-
-                            tangle.updateCumulativeWeight(tx.data.transaction_id); // Increase cumulative weight for new transaction
-
-                            broadcastTransaction(tangle.getTransaction(newTx.data.transaction_id));
-
-                            // Process any orphans waiting for this transaction
-                            processOrphans(newTx.data.transaction_id);
-                        }
-                    }
-                }
-                catch (const std::exception &e)
-                {
-                    std::cerr << "[HANDLER][ERROR] Exception handling NEWTX: " << e.what() << std::endl;
-                }
-                catch (...)
-                {
-                    std::cerr << "[HANDLER][ERROR] Unknown exception handling NEWTX" << std::endl;
-                }
+                handleTxProposal(peer, jsonData);
             }
-            if (messageType == "SYNC_REQ")
+            else if (messageType == "TX_APPROVAL")
+            {
+                handleTxApproval(peer, jsonData);
+            }
+            else if (messageType == "VOTE")
+            {
+                handleVote(peer, jsonData);
+            }
+            else if (messageType == "NEWTX")
+            {
+                // Legacy handler: route to TX_PROPOSAL logic
+                handleTxProposal(peer, jsonData);
+            }
+            else if (messageType == "TX_ACK")
+            {
+                handleTxAck(peer, jsonData);
+            }
+            else if (messageType == "SYNC_REQ")
             {
                 cout << "[HANDLER] Received SYNC_REQ from peer. Sending Tangle data." << endl;
-                // Respond with Tangle data
                 sendTangle(peer);
+                recordValidation(peer.uri, true);
             }
-            if (messageType == "SYNC_ACK")
+            else if (messageType == "SYNC_ACK")
             {
                 cout << "[HANDLER] Received SYNC_ACK from peer. Tangle data synchronized." << endl;
-                // TODO: accept tangle data from peer
                 string data = jsonData["data"].asString();
                 string checksum = jsonData["checksum"].asString();
                 string timestamp = jsonData["timestamp"].asString();
 
                 handleTangleUpdate(data);
+                recordValidation(peer.uri, true);
             }
-            if (messageType == "TX_REQ")
+            else if (messageType == "TX_REQ")
             {
                 try
                 {
@@ -616,14 +507,17 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
                     std::string id = txId;
                     Transaction tx = tangle.getTransaction(id);
                     if (!tx.data.transaction_id.empty()) {
-                        sendMessage(serializeTransaction(tx), "NEWTX", peer);
+                        sendMessage(serializeTransaction(tx), "TX_ACK", peer);
+                        recordValidation(peer.uri, true);
                     } else {
                         cerr << "[HANDLER][ERROR] Requested transaction " << txId << " not found." << endl;
+                        recordValidation(peer.uri, false);
                     }
                 }
                 catch (const std::exception &e)
                 {
                     std::cerr << "[HANDLER][ERROR] Exception handling TX_REQ: " << e.what() << std::endl;
+                    recordValidation(peer.uri, false);
                 }
             }
         }
@@ -642,13 +536,289 @@ void Network::handleIncomingMessage(Peer &peer, const std::string &payload)
     }
 }
 
-void Network::broadcastTransaction(const Transaction &Tx)
+void Network::handleTxProposal(Peer &peer, const Json::Value &jsonData)
+{
+    try
+    {
+        string data = jsonData["data"].asString();
+        string checksum = jsonData["checksum"].asString();
+
+        cout << "[HANDLER] Received TX_PROPOSAL from peer." << endl;
+        Transaction newTx = deserializeTransaction(data);
+
+        // Verify checksum
+        if (!verifyChecksum(data, checksum))
+        {
+            cerr << "[HANDLER][ERROR] Checksum verification failed for TX_PROPOSAL." << endl;
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        // Check for missing parents
+        bool missingParent = false;
+        for (const auto &parent : newTx.data.parents)
+        {
+            std::string parentId = parent;
+            Transaction pTx = tangle.getTransaction(parentId);
+            if (!tangle.transactionPresent(pTx) && parent != "genesis")
+            {
+                if (pTx.data.transaction_id.empty()) {
+                    std::cout << "[ORPHAN] Transaction " << newTx.data.transaction_id << " missing parent " << parent << ". Queuing as orphan." << std::endl;
+                    std::lock_guard<std::recursive_mutex> lock(orphansMutex);
+                    expireOrphans();
+                    orphans[parent].push_back({newTx, timeNow()});
+                    missingParent = true;
+                    requestTransaction(parent, peer);
+                }
+            }
+        }
+        if (missingParent)
+        {
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        // Validate parent status: all parents must be FINAL (except genesis)
+        for (const auto &parent : newTx.data.parents)
+        {
+            if (parent == "genesis") continue;
+            Transaction pTx = tangle.getTransaction(parent);
+            if (pTx.metadata.status != TransactionStatus::FINAL)
+            {
+                cerr << "[HANDLER][ERROR] TX_PROPOSAL parent " << parent
+                     << " is not FINAL. Dropping." << endl;
+                recordValidation(peer.uri, false);
+                return;
+            }
+        }
+
+        // Validate signature 1 (sender)
+        if (newTx.metadata.signature1.empty())
+        {
+            cerr << "[HANDLER][ERROR] TX_PROPOSAL has no signature1. Dropping." << endl;
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        string txSerialized = serializeTransactionData(newTx);
+        if (!verifyTransaction(txSerialized, newTx.metadata.signature1, newTx.data.sender))
+        {
+            cerr << "[HANDLER][ERROR] TX_PROPOSAL signature1 verification failed. Dropping." << endl;
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        int isTxPresent = tangle.addTransaction(newTx, 1);
+        if (isTxPresent == 0)
+        {
+            cout << "[HANDLER] Transaction already exists. No updates." << endl;
+            recordValidation(peer.uri, true);
+            return;
+        }
+        if (isTxPresent == 1)
+        {
+            cout << "[HANDLER] Transaction updated." << endl;
+            postProcessAddedTransaction(newTx.data.transaction_id, peer.uri);
+            recordValidation(peer.uri, true);
+            return;
+        }
+
+        // isTxPresent == 2: newly added
+        cout << "[HANDLER] Transaction added to Tangle. Broadcasting TX_PROPOSAL." << endl;
+        postProcessAddedTransaction(newTx.data.transaction_id, peer.uri);
+        recordValidation(peer.uri, true);
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "[HANDLER][ERROR] Exception handling TX_PROPOSAL: " << e.what() << std::endl;
+        recordValidation(peer.uri, false);
+    }
+}
+
+void Network::handleTxApproval(Peer &peer, const Json::Value &jsonData)
+{
+    try
+    {
+        string data = jsonData["data"].asString();
+        string checksum = jsonData["checksum"].asString();
+
+        if (!verifyChecksum(data, checksum))
+        {
+            cerr << "[HANDLER][ERROR] Checksum verification failed for TX_APPROVAL." << endl;
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        Json::Value approvalData;
+        Json::CharReaderBuilder reader;
+        std::istringstream s(data);
+        std::string errs;
+        if (!Json::parseFromStream(reader, s, &approvalData, &errs))
+        {
+            cerr << "[HANDLER][ERROR] Failed to parse TX_APPROVAL payload: " << errs << endl;
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        string tx_id = approvalData["tx_id"].asString();
+        string sig2 = approvalData["sig2"].asString();
+        string receiver_id = approvalData["receiver_id"].asString();
+
+        Transaction tx = tangle.getTransaction(tx_id);
+        if (tx.data.transaction_id.empty())
+        {
+            cerr << "[HANDLER][ERROR] TX_APPROVAL references unknown tx " << tx_id << ". Requesting it." << endl;
+            requestTransaction(tx_id, peer);
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        // Dedup: already approved — don't re-apply or re-gossip
+        if (!tx.metadata.signature2.empty())
+        {
+            recordValidation(peer.uri, true);
+            return;
+        }
+
+        // Verify sig2 against the transaction data
+        string txSerialized = serializeTransactionData(tx);
+        if (!verifyTransaction(txSerialized, sig2, receiver_id))
+        {
+            cerr << "[HANDLER][ERROR] TX_APPROVAL sig2 verification failed. Dropping." << endl;
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        // Apply approval
+        tx.metadata.signature2 = sig2;
+        tx.metadata.lastUpdated = timeNow();
+        tangle.updateTransaction(tx);
+
+        // Add sender and receiver as implicit voters (they signed the tx)
+        tangle.addVote(tx_id, tx.data.sender);
+        tangle.addVote(tx_id, receiver_id);
+
+        // This node also votes explicitly if it hasn't already
+        createAndBroadcastVote(tx_id);
+        processOrphans(tx_id); // Re-trigger orphan resolution if tx became FINAL
+
+        cout << "[HANDLER] Applied TX_APPROVAL for " << tx_id << ". Gossiping." << endl;
+
+        // Gossip the TX_APPROVAL delta (validate-before-forward)
+        Json::StreamWriterBuilder writer;
+        string msg = Json::writeString(writer, jsonData);
+        broadcastMessage(msg, "TX_APPROVAL", peer.uri);
+
+        recordValidation(peer.uri, true);
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "[HANDLER][ERROR] Exception handling TX_APPROVAL: " << e.what() << std::endl;
+        recordValidation(peer.uri, false);
+    }
+}
+
+void Network::handleVote(Peer &peer, const Json::Value &jsonData)
+{
+    try
+    {
+        string data = jsonData["data"].asString();
+        string checksum = jsonData["checksum"].asString();
+
+        if (!verifyChecksum(data, checksum))
+        {
+            cerr << "[HANDLER][ERROR] Checksum verification failed for VOTE." << endl;
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        Json::Value voteData;
+        Json::CharReaderBuilder reader;
+        std::istringstream s(data);
+        std::string errs;
+        if (!Json::parseFromStream(reader, s, &voteData, &errs))
+        {
+            cerr << "[HANDLER][ERROR] Failed to parse VOTE payload: " << errs << endl;
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        string tx_id = voteData["tx_id"].asString();
+        string voter_id = voteData["voter_id"].asString();
+        string signature = voteData["signature"].asString();
+
+        // Verify vote signature (sign(tx_id + voter_id))
+        string votePayload = tx_id + voter_id;
+        if (!verifyTransaction(votePayload, signature, voter_id))
+        {
+            cerr << "[HANDLER][ERROR] VOTE signature verification failed from " << voter_id << ". Dropping." << endl;
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        Transaction tx = tangle.getTransaction(tx_id);
+        if (tx.data.transaction_id.empty())
+        {
+            cerr << "[HANDLER][ERROR] VOTE references unknown tx " << tx_id << ". Requesting it." << endl;
+            requestTransaction(tx_id, peer);
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        // If already FINAL, accept silently but don't re-propagate
+        if (tx.metadata.status == TransactionStatus::FINAL)
+        {
+            recordValidation(peer.uri, true);
+            return;
+        }
+
+        // Check for duplicate vote before recording
+        if (tx.metadata.voted_by.find(voter_id) != tx.metadata.voted_by.end())
+        {
+            recordValidation(peer.uri, true);
+            return; // duplicate, drop silently
+        }
+
+        bool isNewVote = tangle.addVote(tx_id, voter_id);
+        if (!isNewVote)
+        {
+            recordValidation(peer.uri, true);
+            return; // duplicate (race condition), drop silently
+        }
+        processOrphans(tx_id); // Re-trigger orphan resolution if tx became FINAL
+
+        tx = tangle.getTransaction(tx_id);
+        if (tx.metadata.status == TransactionStatus::FINAL)
+        {
+            cout << "[HANDLER] VOTE from " << voter_id << " finalized tx " << tx_id << ". Gossiping VOTE." << endl;
+        }
+        else
+        {
+            cout << "[HANDLER] Accepted VOTE from " << voter_id << " for tx " << tx_id
+                 << " (votes=" << tx.metadata.votes << ")." << endl;
+        }
+
+        // Always gossip valid new votes
+        Json::StreamWriterBuilder writer;
+        string msg = Json::writeString(writer, jsonData);
+        broadcastMessage(msg, "VOTE", peer.uri);
+
+        recordValidation(peer.uri, true);
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "[HANDLER][ERROR] Exception handling VOTE: " << e.what() << std::endl;
+        recordValidation(peer.uri, false);
+    }
+}
+
+void Network::broadcastTxProposal(const Transaction &Tx, const std::string &excludeUri)
 {
     try
     {
         // Serialize the transaction
         string message = serializeTransaction(Tx);
-        std::cout << "[SEND] Broadcasting new transaction: " << Tx.data.transaction_id << endl;
+        std::cout << "[SEND] Broadcasting TX_PROPOSAL: " << Tx.data.transaction_id << endl;
 
         string checksum = computeChecksum(message);
 
@@ -660,17 +830,70 @@ void Network::broadcastTransaction(const Transaction &Tx)
 
         Json::StreamWriterBuilder writer;
         string jsonString = Json::writeString(writer, jsonData);
-        broadcastMessage(jsonString, "NEWTX");
+        broadcastMessage(jsonString, "TX_PROPOSAL", excludeUri);
     }
     catch (const std::exception &e)
     {
-        std::cerr << "[BROADCAST][ERROR] Exception broadcasting transaction: " << e.what() << std::endl;
+        std::cerr << "[BROADCAST][ERROR] Exception broadcasting TX_PROPOSAL: " << e.what() << std::endl;
     }
     catch (...)
     {
-        std::cerr << "[BROADCAST][ERROR] Unknown exception broadcasting transaction" << std::endl;
+        std::cerr << "[BROADCAST][ERROR] Unknown exception broadcasting TX_PROPOSAL" << std::endl;
     }
 }
+void Network::createAndBroadcastVote(const std::string& tx_id)
+{
+    try
+    {
+        const char* uidEnv = getenv("UID");
+        if (!uidEnv)
+        {
+            std::cerr << "[VOTE][ERROR] UID not set. Cannot create vote." << std::endl;
+            return;
+        }
+        std::string uid = uidEnv;
+
+        // Check if we already voted for this tx
+        Transaction tx = tangle.getTransaction(tx_id);
+        if (tx.metadata.voted_by.find(uid) != tx.metadata.voted_by.end())
+        {
+            return; // already voted
+        }
+
+        // Record vote locally first (so it's counted even if return path is dropped)
+        tangle.addVote(tx_id, uid);
+
+        // Sign vote payload: tx_id + voter_id
+        std::string votePayload = tx_id + uid;
+        std::string signature = signTransaction(votePayload);
+
+        // Build vote JSON
+        Json::Value voteJson;
+        voteJson["tx_id"] = tx_id;
+        voteJson["voter_id"] = uid;
+        voteJson["signature"] = signature;
+
+        // Wrap with checksum
+        Json::StreamWriterBuilder writer;
+        std::string voteMsg = Json::writeString(writer, voteJson);
+        std::string checksum = computeChecksum(voteMsg);
+
+        Json::Value wrap;
+        wrap["data"] = voteMsg;
+        wrap["checksum"] = checksum;
+        wrap["timestamp"] = std::to_string(std::time(nullptr));
+
+        std::string wrapStr = Json::writeString(writer, wrap);
+        broadcastMessage(wrapStr, "VOTE");
+
+        std::cout << "[VOTE] Created and broadcast vote for tx " << tx_id << std::endl;
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "[VOTE][ERROR] Exception creating vote: " << e.what() << std::endl;
+    }
+}
+
 // TODO: sendSyncRequest() function
 
 // Connect to a peer via WebSocket (client side)
@@ -718,40 +941,14 @@ bool Network::connectWebSocket(Peer &peer)
     }
 }
 
-// General function to send a message to all active peers. Input - Message and Message Type
-void Network::broadcastMessage(const string &message, const string &messageType)
+// General function to send a message to a random subset of active peers.
+// excludeUri: optional sender URI to omit from broadcast (prevents echo-back)
+void Network::broadcastMessage(const string &message, const string &messageType, const string &excludeUri)
 {
-    // load maxPeers from environment variable
-	const char *maxPeersEnv = std::getenv("MAX_PEERS");
-    int maxPeers = 5; // default value
-	if (maxPeersEnv)
-	{
-		try
-		{
-			maxPeers = std::stoi(maxPeersEnv);
-			if (maxPeers <= 0)
-			{
-				std::cerr << "[ERROR]: MAX_PEERS must be a positive integer\n";
-				throw std::runtime_error("Invalid MAX_PEERS value");
-			}
-			std::cout << "[INFO] Max peers set to: " << maxPeers << "\n";
-		}
-		catch (const std::exception &e)
-		{
-			std::cerr << "[ERROR]: Invalid MAX_PEERS value: " << e.what() << "\n";
-			throw;
-		}
-	}
-	else
-	{
-		std::cout << "[INFO] MAX_PEERS not set, using default value of 5\n";
-	}
-
-    for (auto &item : peers.getRandomPeerSubset(maxPeers))
+    for (auto &item : peers.getRandomPeerSubset(gossipFanout_))
     {
-        // Construct the message with type prefix
-        string fullMessage = messageType + "::TYPE::" + message;
-
+        if (!excludeUri.empty() && item.second.uri == excludeUri)
+            continue;
         sendMessage(message, messageType, item.second);
     }
 }
@@ -817,21 +1014,92 @@ void Network::sendTangle(Peer& peer)
     std::cout << "[SEND] Sent Tangle sync data to peer: " << peer.id << std::endl;
 }
 
+void Network::expireOrphans()
+{
+    // NOTE: caller must already hold orphansMutex
+    int64_t now = timeNow();
+    size_t totalCount = 0;
+
+    for (auto it = orphans.begin(); it != orphans.end(); )
+    {
+        auto &list = it->second;
+        for (auto listIt = list.begin(); listIt != list.end(); )
+        {
+            if (now - listIt->orphanedAt > orphanTTL)
+            {
+                listIt = list.erase(listIt);
+            }
+            else
+            {
+                ++listIt;
+                ++totalCount;
+            }
+        }
+
+        if (list.empty())
+        {
+            it = orphans.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    // Enforce hard cap: evict oldest entries if over limit
+    while (totalCount > orphanPoolMax)
+    {
+        int64_t oldestTime = now;
+        std::string oldestParent;
+        size_t oldestIdx = 0;
+        bool found = false;
+
+        for (auto &pair : orphans)
+        {
+            for (size_t i = 0; i < pair.second.size(); ++i)
+            {
+                if (pair.second[i].orphanedAt < oldestTime)
+                {
+                    oldestTime = pair.second[i].orphanedAt;
+                    oldestParent = pair.first;
+                    oldestIdx = i;
+                    found = true;
+                }
+            }
+        }
+
+        if (!found) break;
+
+        auto it = orphans.find(oldestParent);
+        if (it != orphans.end() && oldestIdx < it->second.size())
+        {
+            it->second.erase(it->second.begin() + oldestIdx);
+            if (it->second.empty())
+            {
+                orphans.erase(it);
+            }
+        }
+        --totalCount;
+    }
+}
+
 void Network::processOrphans(const std::string &parentId)
 {
-    std::lock_guard<std::mutex> lock(orphansMutex);
+    std::lock_guard<std::recursive_mutex> lock(orphansMutex);
+    expireOrphans();
+
     auto it = orphans.find(parentId);
     if (it != orphans.end())
     {
         std::cout << "[ORPHAN] Processing " << it->second.size() << " orphans for parent " << parentId << std::endl;
         std::vector<Transaction> readyToProcess;
-        
+
         // Check which orphans are now ready (all parents present)
         auto &orphanList = it->second;
         for (auto listIt = orphanList.begin(); listIt != orphanList.end(); )
         {
             bool allParentsPresent = true;
-            for (const auto &p : listIt->data.parents)
+            for (const auto &p : listIt->tx.data.parents)
             {
                 std::string pStr = p;
                 if (tangle.getTransaction(pStr).data.transaction_id.empty() && p != "genesis")
@@ -843,8 +1111,26 @@ void Network::processOrphans(const std::string &parentId)
 
             if (allParentsPresent)
             {
-                readyToProcess.push_back(*listIt);
-                listIt = orphanList.erase(listIt);
+                bool allFinal = true;
+                for (const auto &p : listIt->tx.data.parents)
+                {
+                    if (p == "genesis") continue;
+                    Transaction pTx = tangle.getTransaction(p);
+                    if (pTx.metadata.status != TransactionStatus::FINAL)
+                    {
+                        allFinal = false;
+                        break;
+                    }
+                }
+                if (allFinal)
+                {
+                    readyToProcess.push_back(listIt->tx);
+                    listIt = orphanList.erase(listIt);
+                }
+                else
+                {
+                    ++listIt; // Stay orphaned until all parents are FINAL
+                }
             }
             else
             {
@@ -858,18 +1144,249 @@ void Network::processOrphans(const std::string &parentId)
         }
 
         // Process the ready orphans (re-inject them as if they just arrived)
-        
         for (auto &tx : readyToProcess)
         {
-             std::cout << "[ORPHAN] Un-orphaning transaction " << tx.data.transaction_id << std::endl;
-             
-             int isTxPresent = tangle.addTransaction(tx, 1);
-             if (isTxPresent == 2) {
-                 performPoW(tx.data.transaction_id);
-                 tangle.updateCumulativeWeight(tx.data.transaction_id);
-                 broadcastTransaction(tangle.getTransaction(tx.data.transaction_id));
-                 processOrphans(tx.data.transaction_id); // Recursive call
-             }
+            std::cout << "[ORPHAN] Un-orphaning transaction " << tx.data.transaction_id << std::endl;
+
+            int isTxPresent = tangle.addTransaction(tx, 1);
+            if (isTxPresent == 2 || isTxPresent == 1)
+            {
+                postProcessAddedTransaction(tx.data.transaction_id);
+                removeOrphanFromParentQueues(tx.data.transaction_id, tx.data.parents);
+            }
         }
     }
 }
+
+// Phase 8: Per-peer rate limiting
+
+bool Network::consumeToken(const std::string& peerUri)
+{
+    std::lock_guard<std::mutex> lock(quotaMutex);
+    int64_t now = timeNow();
+    PeerQuota &quota = peerQuotas[peerUri];
+
+    // Initialize lastRefill on first use
+    if (quota.lastRefill == 0)
+    {
+        quota.tokens = rateLimitBurst;
+        quota.lastRefill = now;
+    }
+
+    double elapsedSec = (now - quota.lastRefill) / 1000.0;
+    int peerCount = std::max(1, peers.countPeers());
+    double reputation = (quota.validCount + quota.invalidCount > 0)
+        ? static_cast<double>(quota.validCount) / (quota.validCount + quota.invalidCount)
+        : 1.0;
+    double refillRate = rateLimitBase * reputation / peerCount;
+
+    quota.tokens = std::min(rateLimitBurst, quota.tokens + refillRate * elapsedSec);
+    quota.lastRefill = now;
+
+    if (quota.tokens >= 1.0)
+    {
+        quota.tokens -= 1.0;
+        return true;
+    }
+    return false;
+}
+
+void Network::recordValidation(const std::string& peerUri, bool isValid)
+{
+    std::lock_guard<std::mutex> lock(quotaMutex);
+    int64_t now = timeNow();
+    PeerQuota &quota = peerQuotas[peerUri];
+
+    quota.validationWindow.push_back({now, isValid});
+
+    // Trim entries older than the sliding window
+    while (!quota.validationWindow.empty() &&
+           (now - quota.validationWindow.front().first) > rateLimitWindowMs)
+    {
+        quota.validationWindow.pop_front();
+    }
+
+    // Recalculate counts
+    quota.validCount = 0;
+    quota.invalidCount = 0;
+    for (const auto& entry : quota.validationWindow)
+    {
+        if (entry.second)
+            ++quota.validCount;
+        else
+            ++quota.invalidCount;
+    }
+}
+
+void Network::handleTxAck(Peer &peer, const Json::Value &jsonData)
+{
+    try
+    {
+        string data = jsonData["data"].asString();
+        string checksum = jsonData["checksum"].asString();
+
+        cout << "[HANDLER] Received TX_ACK from peer." << endl;
+        Transaction tx = deserializeTransaction(data);
+
+        // Verify checksum
+        if (!verifyChecksum(data, checksum))
+        {
+            cerr << "[HANDLER][ERROR] Checksum verification failed for TX_ACK." << endl;
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        // Validate signature 1 (sender)
+        string txSerialized = serializeTransactionData(tx);
+        if (!verifyTransaction(txSerialized, tx.metadata.signature1, tx.data.sender))
+        {
+            cerr << "[HANDLER][ERROR] TX_ACK signature1 verification failed. Dropping." << endl;
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        // Check for missing parents (still required for orphan resolution)
+        bool missingParent = false;
+        for (const auto &parent : tx.data.parents)
+        {
+            std::string parentId = parent;
+            Transaction pTx = tangle.getTransaction(parentId);
+            if (!tangle.transactionPresent(pTx) && parent != "genesis")
+            {
+                if (pTx.data.transaction_id.empty()) {
+                    std::cout << "[ORPHAN] TX_ACK transaction " << tx.data.transaction_id << " missing parent " << parent << ". Queuing as orphan." << std::endl;
+                    std::lock_guard<std::recursive_mutex> lock(orphansMutex);
+                    expireOrphans();
+                    orphans[parent].push_back({tx, timeNow()});
+                    missingParent = true;
+                    requestTransaction(parent, peer);
+                }
+            }
+        }
+        if (missingParent)
+        {
+            recordValidation(peer.uri, false);
+            return;
+        }
+
+        // Add to tangle (no parent-status check for TX_ACK — this is catch-up data)
+        int isTxPresent = tangle.addTransaction(tx, 1);
+        if (isTxPresent == 2 || isTxPresent == 1)
+        {
+            std::cout << "[HANDLER] Applied TX_ACK for " << tx.data.transaction_id << "." << endl;
+            postProcessAddedTransaction(tx.data.transaction_id);
+        }
+        else
+        {
+            std::cout << "[HANDLER] TX_ACK transaction already exists. No updates." << endl;
+        }
+
+        recordValidation(peer.uri, true);
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "[HANDLER][ERROR] Exception in handleTxAck: " << e.what() << std::endl;
+        recordValidation(peer.uri, false);
+    }
+}
+
+void Network::postProcessAddedTransaction(const std::string &txId, const std::string &excludeUri)
+{
+    try
+    {
+        Transaction tx = tangle.getTransaction(txId);
+        if (tx.data.transaction_id.empty())
+        {
+            std::cerr << "[POSTPROCESS][ERROR] Transaction " << txId << " not found in Tangle." << std::endl;
+            return;
+        }
+
+        const std::string uid = getenv("UID");
+
+        // If this node is the receiver and sig2 is missing, double-sign
+        if (tx.data.receiver == uid && tx.metadata.signature2.empty())
+        {
+            std::cout << "[POSTPROCESS] Transaction is for this node. Double signing it." << std::endl;
+            string txSerialized = serializeTransactionData(tx);
+            tx.metadata.signature2 = signTransaction(txSerialized);
+            tx.metadata.lastUpdated = timeNow();
+            tx.metadata.verificationTimestamp = timeNow();
+            tx.metadata.verificationDuration = timeNow() - tx.data.timestamp;
+            tangle.updateTransaction(tx);
+
+            // Add implicit vote for sender (receiver = local node gets explicit vote below)
+            tangle.addVote(txId, tx.data.sender);
+
+            // Broadcast TX_APPROVAL delta
+            Json::Value approvalJson;
+            approvalJson["tx_id"] = tx.data.transaction_id;
+            approvalJson["sig2"] = tx.metadata.signature2;
+            approvalJson["receiver_id"] = uid;
+            Json::StreamWriterBuilder writer;
+            string approvalMsg = Json::writeString(writer, approvalJson);
+            string approvalChecksum = computeChecksum(approvalMsg);
+            Json::Value wrap;
+            wrap["data"] = approvalMsg;
+            wrap["checksum"] = approvalChecksum;
+            wrap["timestamp"] = std::to_string(std::time(nullptr));
+            string wrapStr = Json::writeString(writer, wrap);
+            broadcastMessage(wrapStr, "TX_APPROVAL");
+
+            // Explicit vote (local node); handles voted_by check internally
+            createAndBroadcastVote(txId);
+        }
+        else if (!tx.metadata.signature2.empty())
+        {
+            // sig2 already present — add implicit votes for sender and receiver
+            tangle.addVote(txId, tx.data.sender);
+            tangle.addVote(txId, tx.data.receiver);
+            createAndBroadcastVote(txId);
+        }
+        else
+        {
+            // No sig2 yet and we're not the receiver — just vote explicitly
+            createAndBroadcastVote(txId);
+        }
+
+        // Broadcast full TX_PROPOSAL so peers have the latest state
+        broadcastTxProposal(tangle.getTransaction(txId), excludeUri);
+
+        // Resolve any orphans waiting for this transaction
+        processOrphans(txId);
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "[POSTPROCESS][ERROR] Exception: " << e.what() << std::endl;
+    }
+}
+
+void Network::removeOrphanFromParentQueues(const std::string& txId, const std::vector<std::string>& parents)
+{
+    std::lock_guard<std::recursive_mutex> lock(orphansMutex);
+    for (const auto& parent : parents)
+    {
+        if (parent == "genesis") continue;
+        auto it = orphans.find(parent);
+        if (it == orphans.end()) continue;
+        auto& list = it->second;
+        for (auto lit = list.begin(); lit != list.end(); )
+        {
+            if (lit->tx.data.transaction_id == txId)
+            {
+                std::cout << "[ORPHAN] Cleaning ghost entry for " << txId
+                          << " from parent " << parent << " queue." << std::endl;
+                lit = list.erase(lit);
+            }
+            else
+            {
+                ++lit;
+            }
+        }
+        if (list.empty())
+        {
+            orphans.erase(it);
+        }
+    }
+}
+
+// Phase 8: Per-peer rate limiting
