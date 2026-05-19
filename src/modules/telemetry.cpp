@@ -254,7 +254,7 @@ static size_t curl_write_cb(void *contents, size_t size, size_t nmemb, void *use
 	return size * nmemb;
 }
 
-inline HttpResult http_post_json(const std::string &url, const std::string &payload, const std::string &api_key = "", long timeout_seconds = 600L)
+inline HttpResult http_post_json(const std::string &url, const std::string &payload, const std::string &api_key = "", long timeout_seconds = 3600L)
 {
 	HttpResult res;
 	CURL *curl = curl_easy_init();

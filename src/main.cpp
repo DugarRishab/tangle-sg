@@ -684,7 +684,7 @@ int main()
     std::string nodeId = uid;
 
     const char *endpoint_env = getenv("TELEMETRY_ENDPOINT");
-    const std::string endpoint = endpoint_env ? endpoint_env : "http://172.25.0.10:8000/api/telemetry";
+    const std::string endpoint = (endpoint_env && strlen(endpoint_env) > 0) ? endpoint_env : "http://172.25.0.10:8000/api/ingest/telemetry";
 
     const char *run_env = getenv("RUN_ID");
     int runId = run_env ? atoi(run_env) : 0;

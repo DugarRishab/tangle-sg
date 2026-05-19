@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Source systemd env file if it exists (written by install2.sh)
+# Source systemd env file if it exists
 if [ -f /etc/default/tangle-sg ]; then
     # shellcheck source=/dev/null
     source /etc/default/tangle-sg
@@ -37,7 +37,9 @@ export ORPHAN_POOL_MAX="${ORPHAN_POOL_MAX:-1000}"
 export RATE_LIMIT_BASE="${RATE_LIMIT_BASE:-10.0}"
 export RATE_LIMIT_BURST="${RATE_LIMIT_BURST:-20.0}"
 export RATE_LIMIT_WINDOW_SEC="${RATE_LIMIT_WINDOW_SEC:-60}"
-export TELEMETRY_ENDPOINT="${TELEMETRY_ENDPOINT:-}"
+if [ -n "${TELEMETRY_ENDPOINT:-}" ]; then
+    export TELEMETRY_ENDPOINT
+fi
 
 # Check build tools
 for cmd in make g++; do
